@@ -22,7 +22,7 @@ patches:
   - path: patch-ingress.yaml
 
 # Intentionally NOT set here: `images:`. deploy.yml runs `kustomize edit set image
-# v2-api=<registry>/v2-api@sha256:<digest>` against a checked-out copy of this file
+# api=<registry>/api@sha256:<digest>` against a checked-out copy of this file
 # immediately before `kubectl apply -k`, using the exact digest CI just built and Trivy-
 # scanned - so the deployed image is always traceable to a specific scanned build, and this
 # committed file never has to carry a real (or fake) digest.

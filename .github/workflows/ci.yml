@@ -1,11 +1,8 @@
 # .github/workflows/ci.yml
 #
-# NOTE ON SCOPE: this targets v2/api and v2/web, which don't exist yet (see context.md -
-# the real backend is being built separately from the app/ demo). Every job below guards on
-# the target directory actually existing and no-ops with a ::notice:: instead of hard-failing
-# if it doesn't, so this workflow can be merged now (green) without lying about coverage it
-# doesn't have yet. TODO once v2/api and v2/web exist: delete the "Check <path> exists" guard
-# steps and the corresponding `if:` conditions - they're scaffolding, not permanent.
+# Both api/ and web/ exist now. The "Check <path> exists" guard steps below predate that and
+# are dead weight at this point - TODO: remove them and the corresponding `if:` conditions
+# next time this file is touched, rather than as a separate cleanup pass.
 #
 # `deploy.yml` triggers on completion of this workflow (via workflow_run) and only proceeds
 # if it concluded "success" - so a job failing anywhere here blocks a deploy. That's the gate
@@ -32,7 +29,7 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: "22" # matches v2/api/Dockerfile's node:22-slim
+  NODE_VERSION: "22" # matches api/Dockerfile's node:22-slim
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -45,10 +42,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: v2-api
-            path: v2/api
-          - name: v2-web
-            path: v2/web
+          - name: api
+            path: api
+          - name: web
+            path: web
     # `actions: read` is needed only for the "scan this job's own logs" step below, which
     # calls `gh run view --log`. Nothing else in this job needs it.
     permissions:
@@ -64,7 +61,7 @@ jobs:
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::${{ matrix.path }}/package.json not found yet - this job is a no-op until v2 exists (see ci.yml header comment)."
+            echo "::notice::${{ matrix.path }}/package.json not found - this guard step is stale (api/web both exist as of this commit), see the header comment."
           fi
 
       - uses: actions/setup-node@v4
@@ -136,7 +133,7 @@ jobs:
   # not just `npm run build`, and because the SARIF upload needs its own permission grant.
   # ---------------------------------------------------------------------------
   image-scan:
-    name: Trivy image scan (v2/api)
+    name: Trivy image scan (api)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -144,30 +141,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check v2/api exists
+      - name: Check api exists
         id: exists
         run: |
-          if [ -f "v2/api/package.json" ]; then
+          if [ -f "api/package.json" ]; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::v2/api/package.json not found yet - image build/scan skipped until the real API exists."
+            echo "::notice::api/package.json not found yet - image build/scan skipped until the real API exists."
           fi
 
       - name: Build image
         if: steps.exists.outputs.found == 'true'
-        run: docker build -t v2-api:ci -f v2/api/Dockerfile v2/api
+        run: docker build -t api:ci -f api/Dockerfile api
 
       # CIS Docker Benchmark (image scanning) + OWASP A03: fail the build on known HIGH/
       # CRITICAL vulnerabilities in the base image or dependency layers before anything is
       # pushed to a registry a deploy job could pull from.
       # TODO: pin this action to a commit digest (same registry-access limitation noted in
-      # v2/api/Dockerfile applies to resolving third-party Action digests from here).
+      # api/Dockerfile applies to resolving third-party Action digests from here).
       - name: Trivy scan
         if: steps.exists.outputs.found == 'true'
         uses: aquasecurity/trivy-action@0.36.0
         with:
-          image-ref: v2-api:ci
+          image-ref: api:ci
           format: sarif
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
@@ -204,7 +201,7 @@ jobs:
 
       # TODO: pin to a commit digest once this has run at least once and a real Action
       # release can be resolved (same registry/network-access limitation as elsewhere in
-      # this file and in v2/api/Dockerfile).
+      # this file and in api/Dockerfile).
       - name: Run gitleaks against full history
         uses: gitleaks/gitleaks-action@v2
         env:

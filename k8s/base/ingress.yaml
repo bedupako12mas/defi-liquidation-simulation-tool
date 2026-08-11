@@ -16,9 +16,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: v2-api
+  name: api
   labels:
-    app.kubernetes.io/name: v2-api
+    app.kubernetes.io/name: api
     app.kubernetes.io/part-of: liquidation-simulator
   annotations:
     # Belt-and-suspenders body size cap even though Cloudflare should be the primary defense
@@ -39,6 +39,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: v2-api
+                name: api
                 port:
                   name: http

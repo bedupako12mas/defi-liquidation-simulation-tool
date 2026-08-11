@@ -2,7 +2,7 @@
  * `/api/simulate` (SSE stream) + `/api/positions` (per-position drilldown snapshot) client.
  *
  * STREAMING PROTOCOL, real-API side (matches `app/api`'s existing `SweepPoint` shape -
- * `v2/api/src/engine/sweep.ts` - plus the SSE framing decided this session):
+ * `api/src/engine/sweep.ts` - plus the SSE framing decided this session):
  *
  *   GET /api/simulate?presetId=<id>          (EventSource, not POST - a POST body can't
  *                                              drive an EventSource, and the request is

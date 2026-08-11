@@ -6,13 +6,13 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: v2-api
+  name: api
 spec:
   replicas: 2
   template:
     spec:
       containers:
-        - name: v2-api
+        - name: api
           env:
             - name: PORT
               value: "4000"

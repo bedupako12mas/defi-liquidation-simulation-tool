@@ -9,7 +9,7 @@
  * FRONTEND_STRATEGY.md's data-flow section names the eventual real call:
  * `POST /api/cascade-replay` or similar - a single, expensive, serialized fork job, not a
  * streamed sweep like Milestone 1's `/api/simulate`. Do not build that client speculatively
- * here; wire it up for real once `v2/api` actually exposes the route.
+ * here; wire it up for real once `api` actually exposes the route.
  */
 
 export interface CascadeReplayResult {
@@ -18,7 +18,7 @@ export interface CascadeReplayResult {
 
 export async function fetchCascadeReplay(): Promise<never> {
   throw new Error(
-    "fetchCascadeReplay() is a Milestone-2 stub (v2/web/lib/api/cascade.ts) - the fork tier " +
+    "fetchCascadeReplay() is a Milestone-2 stub (web/lib/api/cascade.ts) - the fork tier " +
       "is not built yet. See docs/FRONTEND_STRATEGY.md and capabilities.fork in /api/meta."
   );
 }

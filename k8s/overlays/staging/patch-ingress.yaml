@@ -4,7 +4,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: v2-api
+  name: api
 spec:
   rules:
     - host: staging-api.example.invalid
@@ -14,6 +14,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: v2-api
+                name: api
                 port:
                   name: http

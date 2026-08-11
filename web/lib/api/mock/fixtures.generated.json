@@ -1,6 +1,6 @@
 {
   "generatedAt": "2026-08-11T14:20:46.256Z",
-  "generatedBy": "v2/web/scripts/generate-mock-fixtures.ts (real v2/api/src/engine output, frozen)",
+  "generatedBy": "web/scripts/generate-mock-fixtures.ts (real api/src/engine output, frozen)",
   "meta": {
     "mode": "demo",
     "pinnedBlock": null,
@@ -31,7 +31,7 @@
         "incentivePct": 5,
         "ucFrontierPct": 95.24,
         "liquidationThresholdPct": 83,
-        "provenance": "illustrative: v2/web mock fixture - generic Aave V3 mainnet WETH figures, not read from a deployed contract."
+        "provenance": "illustrative: web mock fixture - generic Aave V3 mainnet WETH figures, not read from a deployed contract."
       },
       {
         "protocol": "aave",
@@ -39,7 +39,7 @@
         "incentivePct": 7.5,
         "ucFrontierPct": 93.02,
         "liquidationThresholdPct": 80,
-        "provenance": "cited: v2/web mock fixture, mirroring the cited Aave V3 stETH parameters used in docs/SCOPE.md's comparison table (80% LT, 7.5% incentive)."
+        "provenance": "cited: web mock fixture, mirroring the cited Aave V3 stETH parameters used in docs/SCOPE.md's comparison table (80% LT, 7.5% incentive)."
       },
       {
         "protocol": "aave",
@@ -55,7 +55,7 @@
         "incentivePct": 0.1,
         "ucFrontierPct": 99.9,
         "liquidationThresholdPct": 95,
-        "provenance": "illustrative: v2/web mock fixture - illustrative Fluid T1 correlated-pair figure, NOT on-chain verified. See docs/SCOPE.md limitation on this ceiling figure's provenance."
+        "provenance": "illustrative: web mock fixture - illustrative Fluid T1 correlated-pair figure, NOT on-chain verified. See docs/SCOPE.md limitation on this ceiling figure's provenance."
       },
       {
         "protocol": "fluid",
@@ -63,7 +63,7 @@
         "incentivePct": 0.15,
         "ucFrontierPct": 99.85,
         "liquidationThresholdPct": 93,
-        "provenance": "illustrative: v2/web mock fixture - same caveat as WSTETH above."
+        "provenance": "illustrative: web mock fixture - same caveat as WSTETH above."
       },
       {
         "protocol": "fluid",
@@ -71,7 +71,7 @@
         "incentivePct": 1,
         "ucFrontierPct": 99.01,
         "liquidationThresholdPct": 85,
-        "provenance": "illustrative: v2/web mock fixture - illustrative uncorrelated-pair Fluid T1 vault figure."
+        "provenance": "illustrative: web mock fixture - illustrative uncorrelated-pair Fluid T1 vault figure."
       }
     ],
     "limitations": [
@@ -82,7 +82,7 @@
       "No liquidity/slippage-capacity check - the model does not ask whether the market can actually absorb the seized collateral at a profit.",
       "No toxic-liquidation-spiral / cascade dynamics simulated yet in this milestone - positions crossing the undercollateralization frontier are flagged, but the multi-round spiral itself is not replayed. That is Milestone 2 (CascadeDetailTab), gated on capabilities.fork.",
       "This comparison addresses liquidation-mechanism risk under genuine price shocks only, not collateral-integrity failures (bridge/oracle exploits) - see docs/SCOPE.md.",
-      "MOCK MODE (v2/web, Milestone 1): positions and protocol parameters below are synthetic fixtures baked by scripts/generate-mock-fixtures.ts for frontend development, computed with the real, tested engine (v2/api/src/engine) but not sourced from chain and not the same fixture set app/api's demo uses. Swapped for a live v2/api response once its routes exist - see lib/api/meta.ts."
+      "MOCK MODE (web, Milestone 1): positions and protocol parameters below are synthetic fixtures baked by scripts/generate-mock-fixtures.ts for frontend development, computed with the real, tested engine (api/src/engine) but not sourced from chain and not the same fixture set app/api's demo uses. Swapped for a live api response once its routes exist - see lib/api/meta.ts."
     ],
     "capabilities": {
       "rpc": true,

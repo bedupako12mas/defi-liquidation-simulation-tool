@@ -7,19 +7,19 @@
  * exercises the SAME contract shape the real API will return. The cheapest way to guarantee
  * that isn't "type it carefully by hand" (which drifts, silently, the moment sweep.ts's
  * output shape changes) - it's to literally run the real, tested engine
- * (`v2/api/src/engine/`, 17 passing tests as of the commit that ported it - see
+ * (`api/src/engine/`, 17 passing tests as of the commit that ported it - see
  * docs/decisions.md) against a small fixture position set and freeze its actual output. If
  * the engine's math or output shape changes, re-running this script is how the mock data
  * stays honest, not a second hand-maintained copy of the math.
  *
- * WHY A FRESH FIXTURE POSITION SET, NOT app/api's: v2/web must not depend on the sibling
+ * WHY A FRESH FIXTURE POSITION SET, NOT app/api's: web must not depend on the sibling
  * `Liquidation Mechanisms` repo/worktree at build or runtime - this script only reaches
- * into `../../api/src/engine` (same repo, v2/api, a dev-time-only cross-import - nothing in
+ * into `../../api/src/engine` (same repo, api, a dev-time-only cross-import - nothing in
  * the shipped Next.js app imports across the package boundary; only this codegen script
  * does, and only at generation time). The position/param values below are a new, smaller,
  * clearly-labeled illustrative set, not copied from anywhere real.
  *
- * Run: `npm run generate:mocks` (from v2/web). Re-run and re-commit the output whenever the
+ * Run: `npm run generate:mocks` (from web). Re-run and re-commit the output whenever the
  * engine's math, this script's fixture set, or the sweep/position grid changes.
  */
 
@@ -62,13 +62,13 @@ const AAVE_PARAMS: Record<string, AssetParams> = {
     liquidationThresholdBps: 8300n,
     liquidationIncentiveBps: 500n,
     provenance: "illustrative",
-    note: "v2/web mock fixture - generic Aave V3 mainnet WETH figures, not read from a deployed contract.",
+    note: "web mock fixture - generic Aave V3 mainnet WETH figures, not read from a deployed contract.",
   },
   WSTETH: {
     liquidationThresholdBps: 8000n,
     liquidationIncentiveBps: 750n,
     provenance: "cited",
-    note: "v2/web mock fixture, mirroring the cited Aave V3 stETH parameters used in docs/SCOPE.md's comparison table (80% LT, 7.5% incentive).",
+    note: "web mock fixture, mirroring the cited Aave V3 stETH parameters used in docs/SCOPE.md's comparison table (80% LT, 7.5% incentive).",
   },
   USDC: {
     liquidationThresholdBps: 8900n,
@@ -83,19 +83,19 @@ const FLUID_PARAMS: Record<string, AssetParams> = {
     liquidationThresholdBps: 9500n,
     liquidationIncentiveBps: 10n,
     provenance: "illustrative",
-    note: "v2/web mock fixture - illustrative Fluid T1 correlated-pair figure, NOT on-chain verified. See docs/SCOPE.md limitation on this ceiling figure's provenance.",
+    note: "web mock fixture - illustrative Fluid T1 correlated-pair figure, NOT on-chain verified. See docs/SCOPE.md limitation on this ceiling figure's provenance.",
   },
   WEETH: {
     liquidationThresholdBps: 9300n,
     liquidationIncentiveBps: 15n,
     provenance: "illustrative",
-    note: "v2/web mock fixture - same caveat as WSTETH above.",
+    note: "web mock fixture - same caveat as WSTETH above.",
   },
   WETH: {
     liquidationThresholdBps: 8500n,
     liquidationIncentiveBps: 100n,
     provenance: "illustrative",
-    note: "v2/web mock fixture - illustrative uncorrelated-pair Fluid T1 vault figure.",
+    note: "web mock fixture - illustrative uncorrelated-pair Fluid T1 vault figure.",
   },
 };
 
@@ -115,7 +115,7 @@ const ASSET_SHOCK_CONFIG: Record<string, AssetShockConfig> = {
 
 // ---------------------------------------------------------------------------------------
 // Mock positions - a small, deliberately clustered set (same illustrative spirit as
-// app/api's fixtures, but a fresh/smaller set written for v2/web, not copied).
+// app/api's fixtures, but a fresh/smaller set written for web, not copied).
 // ---------------------------------------------------------------------------------------
 
 function aavePosition(id: string, collateralUsd: number, ltv: number, asset: "WETH" | "WSTETH"): Position {
@@ -274,7 +274,7 @@ const LIMITATIONS = [
   "No liquidity/slippage-capacity check - the model does not ask whether the market can actually absorb the seized collateral at a profit.",
   "No toxic-liquidation-spiral / cascade dynamics simulated yet in this milestone - positions crossing the undercollateralization frontier are flagged, but the multi-round spiral itself is not replayed. That is Milestone 2 (CascadeDetailTab), gated on capabilities.fork.",
   "This comparison addresses liquidation-mechanism risk under genuine price shocks only, not collateral-integrity failures (bridge/oracle exploits) - see docs/SCOPE.md.",
-  "MOCK MODE (v2/web, Milestone 1): positions and protocol parameters below are synthetic fixtures baked by scripts/generate-mock-fixtures.ts for frontend development, computed with the real, tested engine (v2/api/src/engine) but not sourced from chain and not the same fixture set app/api's demo uses. Swapped for a live v2/api response once its routes exist - see lib/api/meta.ts.",
+  "MOCK MODE (web, Milestone 1): positions and protocol parameters below are synthetic fixtures baked by scripts/generate-mock-fixtures.ts for frontend development, computed with the real, tested engine (api/src/engine) but not sourced from chain and not the same fixture set app/api's demo uses. Swapped for a live api response once its routes exist - see lib/api/meta.ts.",
 ];
 
 function buildMeta() {
@@ -323,7 +323,7 @@ function buildPositionSnapshots() {
 
 const fixtures = {
   generatedAt: new Date().toISOString(),
-  generatedBy: "v2/web/scripts/generate-mock-fixtures.ts (real v2/api/src/engine output, frozen)",
+  generatedBy: "web/scripts/generate-mock-fixtures.ts (real api/src/engine output, frozen)",
   meta: buildMeta(),
   sweeps: buildSweeps(),
   positionSnapshots: buildPositionSnapshots(),

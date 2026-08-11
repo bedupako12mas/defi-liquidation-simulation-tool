@@ -6,14 +6,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: v2-api
+  name: api
   labels:
-    app.kubernetes.io/name: v2-api
+    app.kubernetes.io/name: api
     app.kubernetes.io/part-of: liquidation-simulator
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: v2-api
+    app.kubernetes.io/name: api
   ports:
     - name: http
       port: 80

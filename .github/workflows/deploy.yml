@@ -50,10 +50,10 @@ jobs:
           echo "TODO: this step needs a real container registry (DOCR/GHCR/etc.) and a"
           echo "GitHub Actions secret with push credentials - see DEPLOYMENT.md. Sketch of"
           echo "what belongs here once that exists:"
-          echo "  docker build -t \$REGISTRY/v2-api:\$GITHUB_SHA -f v2/api/Dockerfile v2/api"
-          echo "  docker push \$REGISTRY/v2-api:\$GITHUB_SHA"
+          echo "  docker build -t \$REGISTRY/api:\$GITHUB_SHA -f api/Dockerfile api"
+          echo "  docker push \$REGISTRY/api:\$GITHUB_SHA"
           echo "  # then resolve the pushed digest for the kustomize step below, e.g.:"
-          echo "  # docker inspect --format='{{index .RepoDigests 0}}' \$REGISTRY/v2-api:\$GITHUB_SHA"
+          echo "  # docker inspect --format='{{index .RepoDigests 0}}' \$REGISTRY/api:\$GITHUB_SHA"
           exit 1 # deliberately fails closed - this is a stub, not a working deploy step
 
       # NOTE ON THE SECRET NAME BELOW: deliberately NOT written as a live ${{ secrets.X }}
@@ -84,9 +84,9 @@ jobs:
         run: |
           echo "TODO: once the two steps above are real, this becomes:"
           echo "  cd k8s/overlays/staging"
-          echo "  kustomize edit set image v2-api=\$REGISTRY/v2-api@\$PUSHED_DIGEST"
+          echo "  kustomize edit set image api=\$REGISTRY/api@\$PUSHED_DIGEST"
           echo "  kubectl apply -k ."
-          echo "  kubectl rollout status deployment/v2-api -n liquidation-sim-staging --timeout=120s"
+          echo "  kubectl rollout status deployment/api -n liquidation-sim-staging --timeout=120s"
           echo "kustomize edit set image writes into a CI-local checkout only, never commits"
           echo "back - k8s/overlays/staging/kustomization.yaml in git never carries a real"
           echo "image reference (see the comment in that file)."
@@ -118,7 +118,7 @@ jobs:
         run: |
           echo "TODO: once real, this is:"
           echo "  cd k8s/overlays/prod"
-          echo "  kustomize edit set image v2-api=\$REGISTRY/v2-api@\$PUSHED_DIGEST"
+          echo "  kustomize edit set image api=\$REGISTRY/api@\$PUSHED_DIGEST"
           echo "  kubectl apply -k ."
-          echo "  kubectl rollout status deployment/v2-api -n liquidation-sim-prod --timeout=120s"
+          echo "  kubectl rollout status deployment/api -n liquidation-sim-prod --timeout=120s"
           exit 1

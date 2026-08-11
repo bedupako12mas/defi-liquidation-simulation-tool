@@ -1,7 +1,7 @@
 # Deployment runbook
 
-This repo now has DevOps scaffolding (`.github/workflows/`, `k8s/`, `v2/api/Dockerfile`,
-`v2/web/vercel.json`, `gitleaks.toml`, `.github/dependabot.yml`) committed by an agent, in a
+This repo now has DevOps scaffolding (`.github/workflows/`, `k8s/`, `api/Dockerfile`,
+`web/vercel.json`, `gitleaks.toml`, `.github/dependabot.yml`) committed by an agent, in a
 worktree, with no network access to any cloud provider and no account credentials. None of it
 can deploy anything by itself yet. This document is the explicit list of what a human with
 real credentials has to do, in roughly this order, before that changes.
@@ -53,20 +53,20 @@ Then, in the GitHub repo's Settings:
 
 ---
 
-## 2. Vercel (`v2/web`)
+## 2. Vercel (`web`)
 
 Not runnable by an agent: `vercel login` opens a browser-based OAuth flow tied to a specific
 human's identity, by design.
 
 1. `vercel login` (interactively, as the account that should own this project).
-2. `vercel link` inside `v2/web` once that directory has real Next.js code in it - this
+2. `vercel link` inside `web` once that directory has real Next.js code in it - this
    writes a `.vercel/` directory locally (already covered by `.gitignore`'s `node_modules`/
    build-output patterns in spirit; add `.vercel` explicitly if it isn't already ignored by
    the time this runs, since it can contain project/org IDs).
 3. In the Vercel dashboard: set the project's environment variables (e.g. the deployed
-   `v2/api` origin URL, once step 3 below produces one) separately for Preview/staging and
+   `api` origin URL, once step 3 below produces one) separately for Preview/staging and
    Production - do not hardcode an API URL into committed code.
-4. Confirm `v2/web/vercel.json`'s headers actually show up (`curl -I` the deployed URL) once
+4. Confirm `web/vercel.json`'s headers actually show up (`curl -I` the deployed URL) once
    there's a real deployment to check.
 
 ---
@@ -112,10 +112,10 @@ what.
 1. Stand up Vault (HCP Vault Dedicated, or self-hosted on a small droplet/cluster - a
    separate decision from the DOKS cluster running the app).
 2. Enable the Kubernetes auth method, pointed at the DOKS cluster's API server and CA cert.
-3. Write a policy scoped to exactly what `v2-api` needs to read (e.g.
-   `secret/data/v2-api/staging`, `secret/data/v2-api/prod` - separate paths per environment,
+3. Write a policy scoped to exactly what `api` needs to read (e.g.
+   `secret/data/api/staging`, `secret/data/api/prod` - separate paths per environment,
    matching the namespace split above) - not a broad `secret/*` grant.
-4. Create a Kubernetes auth role binding the `v2-api` ServiceAccount (in each namespace) to
+4. Create a Kubernetes auth role binding the `api` ServiceAccount (in each namespace) to
    that policy.
 5. Install the Vault Agent Injector (Helm chart, `hashicorp/vault-k8s`) into the cluster.
 6. Only then, uncomment and fill in the `vault.hashicorp.com/*` annotation block in
@@ -161,20 +161,20 @@ what.
 
 Grep-able by searching for `TODO` and `PLACEHOLDER` across the repo, but summarized here:
 
-- `v2/api/Dockerfile` - base image tag (`node:22-slim`) not pinned to a digest; needs
+- `api/Dockerfile` - base image tag (`node:22-slim`) not pinned to a digest; needs
   `docker pull` + `docker inspect` against a real registry.
 - `.github/workflows/ci.yml` - `aquasecurity/trivy-action@0.28.0` and
   `gitleaks/gitleaks-action@v2` referenced by tag, not digest, for the same reason.
 - `.github/workflows/deploy.yml` - every actual deploy step is a stub that echoes intent and
   exits 1; no registry, cluster, or secret exists for it to act on yet.
-- `k8s/base/deployment.yaml` - `image: v2-api:unset` (deliberately inert placeholder, see
+- `k8s/base/deployment.yaml` - `image: api:unset` (deliberately inert placeholder, see
   comment in the file); Vault Agent annotations left absent, not guessed.
 - `k8s/base/ingress.yaml`, `k8s/overlays/*/patch-ingress.yaml` - hostnames use the
   `.invalid` TLD (IANA-reserved, guaranteed not to resolve), and `ingressClassName: nginx`
   is an assumption to confirm once the cluster exists.
 - `k8s/base/deployment.yaml` and both overlays' `resources.requests`/`resources.limits` -
   conservative starting guesses, not load-tested numbers.
-- `.github/dependabot.yml` - the `v2/api` and `v2/web` directory entries will show as errored
+- `.github/dependabot.yml` - the `api` and `web` directory entries will show as errored
   in the Dependabot UI until those directories have a real `package.json`.
 
 None of these were made to *look* resolved - each is either commented as a TODO with the

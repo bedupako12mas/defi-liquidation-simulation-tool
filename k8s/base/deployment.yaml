@@ -1,18 +1,18 @@
 # k8s/base/deployment.yaml
 #
-# Base Deployment for v2/api on DOKS (context.md §9). Shared by both staging and prod via
+# Base Deployment for api on DOKS (context.md §9). Shared by both staging and prod via
 # kustomize overlays (k8s/overlays/*) - same manifest, different values, per the confirmed
 # tech stack's "staging + prod for everything, same manifests, different values" requirement.
 #
-# v2/api doesn't exist yet, so `image` below is a placeholder (see comment on that field) and
+# api doesn't exist yet, so `image` below is a placeholder (see comment on that field) and
 # every value here is a starting point, not a measured one - a human should revisit
 # resources.* once the real app has been load-tested.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: v2-api
+  name: api
   labels:
-    app.kubernetes.io/name: v2-api
+    app.kubernetes.io/name: api
     app.kubernetes.io/part-of: liquidation-simulator
 spec:
   # Overridden per-environment (staging: 1, prod: 2+) via overlay patches - see
@@ -20,11 +20,11 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: v2-api
+      app.kubernetes.io/name: api
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: v2-api
+        app.kubernetes.io/name: api
       # -----------------------------------------------------------------------------------
       # Vault Agent sidecar injection (HashiCorp Vault Injector webhook), per context.md
       # §9/§10: "never a k8s Secret applied from a laptop... Vault, injected at runtime."
@@ -38,10 +38,10 @@ spec:
       #
       # annotations:
       #   vault.hashicorp.com/agent-inject: "true"
-      #   vault.hashicorp.com/role: "v2-api"                                # Vault K8s-auth role, per env
-      #   vault.hashicorp.com/agent-inject-secret-config.env: "secret/data/v2-api/<ENV>"
+      #   vault.hashicorp.com/role: "api"                                # Vault K8s-auth role, per env
+      #   vault.hashicorp.com/agent-inject-secret-config.env: "secret/data/api/<ENV>"
       #   vault.hashicorp.com/agent-inject-template-config.env: |
-      #     {{- with secret "secret/data/v2-api/<ENV>" -}}
+      #     {{- with secret "secret/data/api/<ENV>" -}}
       #     {{- range $k, $v := .Data.data }}
       #     {{ $k }}={{ $v }}
       #     {{- end }}
@@ -63,26 +63,26 @@ spec:
         # not just by convention in the Dockerfile - if the image ever regresses to running
         # as root, the kubelet refuses to start the pod instead of silently allowing it.
         runAsNonRoot: true
-        runAsUser: 1000 # matches node:22-slim's built-in `node` user (see v2/api/Dockerfile)
+        runAsUser: 1000 # matches node:22-slim's built-in `node` user (see api/Dockerfile)
         runAsGroup: 1000
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: v2-api
+        - name: api
           # Placeholder image name/tag - deliberately unqualified (no registry prefix) so
-          # `kustomize edit set image v2-api=<real-registry>/v2-api@sha256:<digest>` (run by
-          # CI, see .github/workflows/deploy.yml) matches on the "v2-api" name and replaces
+          # `kustomize edit set image api=<real-registry>/api@sha256:<digest>` (run by
+          # CI, see .github/workflows/deploy.yml) matches on the "api" name and replaces
           # this whole value with the digest-pinned image it just built and Trivy-scanned.
           # This literal value should never actually run - if a pod ever comes up with image
-          # "v2-api:unset", the deploy pipeline was bypassed. TODO: once a registry (DOCR,
+          # "api:unset", the deploy pipeline was bypassed. TODO: once a registry (DOCR,
           # GHCR, etc.) is provisioned, that's a CI/deploy.yml concern, not a change needed
           # here.
-          image: "v2-api:unset"
+          image: "api:unset"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 4000 # matches PORT default in v2/api/Dockerfile
+              containerPort: 4000 # matches PORT default in api/Dockerfile
           env:
             - name: PORT
               value: "4000"
@@ -92,7 +92,7 @@ spec:
             capabilities:
               drop: ["ALL"]
           # The app writes nothing to disk (Fastify logs to stdout - see app/api/src/server.ts's
-          # `logger: true` pattern, which v2/api is expected to follow), so the only thing that
+          # `logger: true` pattern, which api is expected to follow), so the only thing that
           # needs a writable mount under a read-only root fs is a scratch /tmp, in case Node or
           # a dependency ever wants one (e.g. for a temp file during a require()). Cheap
           # insurance, not a sign the app is expected to use it.
@@ -100,7 +100,7 @@ spec:
             - name: tmp
               mountPath: /tmp
           # Liveness/readiness both hit GET /health (app/api/src/server.ts's existing route;
-          # v2/api is expected to keep it). Distinct probes because they answer distinct
+          # api is expected to keep it). Distinct probes because they answer distinct
           # questions: readiness gates whether the Service sends traffic here at all (matters
           # a lot right after a rolling deploy); liveness decides whether to restart a pod
           # that's alive-but-wedged (OWASP A09 - want a signal beyond "the process exists").

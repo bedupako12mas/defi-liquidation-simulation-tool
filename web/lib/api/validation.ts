@@ -8,7 +8,7 @@
  * the plan is legible now" - not because there is a working validation flow today.
  *
  * When Milestone 2 starts: replace `notImplemented()` with a real client for whatever
- * fork-replay validation endpoint `v2/api` exposes then (FRONTEND_STRATEGY.md's data-flow
+ * fork-replay validation endpoint `api` exposes then (FRONTEND_STRATEGY.md's data-flow
  * section: "on-demand, single-scenario request... since fork jobs are serialized and
  * expensive"). Do not call this from a Milestone-1 component before that's true.
  */
@@ -21,7 +21,7 @@ export interface ValidationResult {
 
 export async function fetchValidation(): Promise<never> {
   throw new Error(
-    "fetchValidation() is a Milestone-2 stub (v2/web/lib/api/validation.ts) - the fork tier " +
+    "fetchValidation() is a Milestone-2 stub (web/lib/api/validation.ts) - the fork tier " +
       "is not built yet. See docs/FRONTEND_STRATEGY.md and capabilities.fork in /api/meta."
   );
 }

@@ -6,7 +6,7 @@
 # against something already in the tree, even if nobody touches that package.json again.
 # Neither replaces the other.
 #
-# npm-ecosystem entries for this repo's two package.json locations (v2/api, v2/web).
+# npm-ecosystem entries for this repo's two package.json locations (api, web).
 # app/api and app/web do NOT exist here - this is the public repo, and app/ (the local demo)
 # was deliberately excluded from it, kept only in the private working checkout. An earlier
 # version of this file still had app/* entries (leftover from before that exclusion decision
@@ -14,22 +14,22 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: /v2/api
+    directory: /api
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
     labels:
       - dependencies
-      - v2-api
+      - api
 
   - package-ecosystem: npm
-    directory: /v2/web
+    directory: /web
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
     labels:
       - dependencies
-      - v2-web
+      - web
 
   # GitHub Actions themselves are a supply-chain surface too (a compromised third-party
   # action is a direct path to secrets in this repo's Actions context) - keep the ones this

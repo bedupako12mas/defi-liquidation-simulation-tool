@@ -1,18 +1,18 @@
 # Strategic merge patch over k8s/base/deployment.yaml - staging values only.
 # context.md §9: "staging points at a testnet or a pinned historical block; prod at
 # mainnet" - that RPC/chain config is application-level env, not a k8s concern, and belongs
-# in whatever config v2/api actually reads (env var, Vault-injected file - TBD once v2/api
+# in whatever config api actually reads (env var, Vault-injected file - TBD once api
 # exists). What's set here is purely infra sizing: staging runs a single small replica.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: v2-api
+  name: api
 spec:
   replicas: 1
   template:
     spec:
       containers:
-        - name: v2-api
+        - name: api
           env:
             - name: PORT
               value: "4000"

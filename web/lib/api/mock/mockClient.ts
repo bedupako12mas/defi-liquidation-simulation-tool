@@ -1,6 +1,6 @@
 /**
  * Reads `fixtures.generated.json` (produced by `scripts/generate-mock-fixtures.ts` from the
- * real, tested `v2/api/src/engine` - see that script's top comment) and serves it through the
+ * real, tested `api/src/engine` - see that script's top comment) and serves it through the
  * exact return shapes `meta.ts`/`simulate.ts` expose to the rest of the app. Every function
  * here is imported dynamically (`await import("./mock/mockClient")`) from those two files
  * only when `USE_MOCK` is true, so none of this ships in a build that talks to the real API.

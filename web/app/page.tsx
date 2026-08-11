@@ -51,10 +51,10 @@ function AppShell() {
       </header>
 
       <div className="banner banner-info">
-        <strong>MOCK API MODE.</strong> <code>v2/api</code> has no server/routes yet (see
+        <strong>MOCK API MODE.</strong> <code>api</code> has no server/routes yet (see
         docs/flow.md) - every number on this page comes from{" "}
         <code>scripts/generate-mock-fixtures.ts</code>, which runs the real, tested{" "}
-        <code>v2/api/src/engine</code> against illustrative fixture positions, not from chain
+        <code>api/src/engine</code> against illustrative fixture positions, not from chain
         and not from a live API. See <code>lib/api/meta.ts</code> for the exact swap point once
         the real API exists.
       </div>
