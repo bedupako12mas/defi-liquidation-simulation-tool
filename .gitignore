@@ -72,3 +72,8 @@ npm-debug.log*
 # Local scan output (Trivy/gitleaks reports written to disk during local runs)
 trivy-results.*
 gitleaks-report.*
+
+# Local-only working docs - never pushed. See ../Liquidation Mechanisms/docs/ for the full
+# scope/research archive (context.md, SCOPE.md, fundamentals/, study-guide/) - kept private
+# there deliberately, not duplicated here.
+docs/
