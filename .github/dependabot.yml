@@ -6,35 +6,13 @@
 # against something already in the tree, even if nobody touches that package.json again.
 # Neither replaces the other.
 #
-# npm-ecosystem entries for all four package.json locations: the two that exist today
-# (app/api, app/web - the working local demo) and the two that don't yet (v2/api, v2/web -
-# the real backend/frontend context.md describes, scaffolded ahead of the code per this
-# task). Dependabot silently no-ops (shows as an errored config check in the repo's
-# Dependabot tab, does not fail CI) for a directory/manifest it can't find - so the v2/*
-# entries are safe to merge now, but a human should confirm they've gone green once v2/api
-# and v2/web actually have a package.json committed. TODO: if v2/api or v2/web end up at
-# different paths than assumed here, update `directory` below to match.
+# npm-ecosystem entries for this repo's two package.json locations (v2/api, v2/web).
+# app/api and app/web do NOT exist here - this is the public repo, and app/ (the local demo)
+# was deliberately excluded from it, kept only in the private working checkout. An earlier
+# version of this file still had app/* entries (leftover from before that exclusion decision
+# existed), which Dependabot silently no-ops on but is confusing noise - removed.
 version: 2
 updates:
-  - package-ecosystem: npm
-    directory: /app/api
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
-    labels:
-      - dependencies
-      - app-api
-
-  - package-ecosystem: npm
-    directory: /app/web
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
-    labels:
-      - dependencies
-      - app-web
-
-  # v2/api does not exist yet - path assumed from context.md's architecture section.
   - package-ecosystem: npm
     directory: /v2/api
     schedule:
@@ -44,7 +22,6 @@ updates:
       - dependencies
       - v2-api
 
-  # v2/web does not exist yet - path assumed from context.md's architecture section.
   - package-ecosystem: npm
     directory: /v2/web
     schedule:
