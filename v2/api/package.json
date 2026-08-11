@@ -16,7 +16,7 @@
     "@fastify/cors": "^10.0.1"
   },
   "devDependencies": {
-    "typescript": "^5.6.3",
+    "typescript": "^7.0.2",
     "tsx": "^4.19.2",
     "vitest": "^2.1.4",
     "@types/node": "^22.9.0"
