@@ -1,0 +1,138 @@
+# k8s/base/deployment.yaml
+#
+# Base Deployment for v2/api on DOKS (context.md §9). Shared by both staging and prod via
+# kustomize overlays (k8s/overlays/*) - same manifest, different values, per the confirmed
+# tech stack's "staging + prod for everything, same manifests, different values" requirement.
+#
+# v2/api doesn't exist yet, so `image` below is a placeholder (see comment on that field) and
+# every value here is a starting point, not a measured one - a human should revisit
+# resources.* once the real app has been load-tested.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: v2-api
+  labels:
+    app.kubernetes.io/name: v2-api
+    app.kubernetes.io/part-of: liquidation-simulator
+spec:
+  # Overridden per-environment (staging: 1, prod: 2+) via overlay patches - see
+  # k8s/overlays/*/patch-deployment.yaml.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: v2-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: v2-api
+      # -----------------------------------------------------------------------------------
+      # Vault Agent sidecar injection (HashiCorp Vault Injector webhook), per context.md
+      # §9/§10: "never a k8s Secret applied from a laptop... Vault, injected at runtime."
+      # No `annotations:` block yet, deliberately - enabling this requires a real Vault
+      # instance, a configured Kubernetes auth method, and a policy scoped to this app's
+      # secrets path, none of which exist (see DEPLOYMENT.md for the human steps to create
+      # them). Do NOT add these with a fabricated VAULT_ADDR or role - that either fails pod
+      # admission loudly (safe) or, worse, points at nothing and the app starts with no
+      # secrets and no obvious error (unsafe). Add an `annotations:` map here with real
+      # values once Vault exists:
+      #
+      # annotations:
+      #   vault.hashicorp.com/agent-inject: "true"
+      #   vault.hashicorp.com/role: "v2-api"                                # Vault K8s-auth role, per env
+      #   vault.hashicorp.com/agent-inject-secret-config.env: "secret/data/v2-api/<ENV>"
+      #   vault.hashicorp.com/agent-inject-template-config.env: |
+      #     {{- with secret "secret/data/v2-api/<ENV>" -}}
+      #     {{- range $k, $v := .Data.data }}
+      #     {{ $k }}={{ $v }}
+      #     {{- end }}
+      #     {{- end }}
+      #   vault.hashicorp.com/agent-pre-populate-only: "true"   # inject once at start, not a long-lived sidecar process, since this app doesn't need live secret rotation without a restart yet
+    spec:
+      # This pod never calls the Kubernetes API itself - don't hand it a token that could
+      # be used to (CIS Kubernetes Benchmark 5.1.6 / OWASP A06 - Insecure Design: least
+      # privilege by default, not "revoke access later if it turns out to be unused").
+      # NOTE for whoever wires up Vault (see annotations block above): the Vault Agent
+      # Injector authenticates to Vault's Kubernetes auth method using this pod's
+      # ServiceAccount token. Confirm, once Vault is actually configured, whether the
+      # injector mounts its own token independent of this flag or whether this needs to
+      # become `true` (scoped to a dedicated, minimally-privileged ServiceAccount, not the
+      # default one) for Vault auth to work - don't just flip it back to `true` on a guess.
+      automountServiceAccountToken: false
+      securityContext:
+        # CIS Kubernetes Benchmark 5.2.x + OWASP A06: enforce non-root at the pod level too,
+        # not just by convention in the Dockerfile - if the image ever regresses to running
+        # as root, the kubelet refuses to start the pod instead of silently allowing it.
+        runAsNonRoot: true
+        runAsUser: 1000 # matches node:22-slim's built-in `node` user (see v2/api/Dockerfile)
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: v2-api
+          # Placeholder image name/tag - deliberately unqualified (no registry prefix) so
+          # `kustomize edit set image v2-api=<real-registry>/v2-api@sha256:<digest>` (run by
+          # CI, see .github/workflows/deploy.yml) matches on the "v2-api" name and replaces
+          # this whole value with the digest-pinned image it just built and Trivy-scanned.
+          # This literal value should never actually run - if a pod ever comes up with image
+          # "v2-api:unset", the deploy pipeline was bypassed. TODO: once a registry (DOCR,
+          # GHCR, etc.) is provisioned, that's a CI/deploy.yml concern, not a change needed
+          # here.
+          image: "v2-api:unset"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 4000 # matches PORT default in v2/api/Dockerfile
+          env:
+            - name: PORT
+              value: "4000"
+          securityContext:
+            readOnlyRootFilesystem: true # CIS Docker/K8s Benchmark - paired with the Dockerfile writing nothing to its own image at runtime
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          # The app writes nothing to disk (Fastify logs to stdout - see app/api/src/server.ts's
+          # `logger: true` pattern, which v2/api is expected to follow), so the only thing that
+          # needs a writable mount under a read-only root fs is a scratch /tmp, in case Node or
+          # a dependency ever wants one (e.g. for a temp file during a require()). Cheap
+          # insurance, not a sign the app is expected to use it.
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          # Liveness/readiness both hit GET /health (app/api/src/server.ts's existing route;
+          # v2/api is expected to keep it). Distinct probes because they answer distinct
+          # questions: readiness gates whether the Service sends traffic here at all (matters
+          # a lot right after a rolling deploy); liveness decides whether to restart a pod
+          # that's alive-but-wedged (OWASP A09 - want a signal beyond "the process exists").
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3
+          # CIS Docker/Kubernetes Benchmark: every container gets explicit requests/limits -
+          # an unbounded pod can starve its node (availability risk = OWASP A06/A10 territory:
+          # an unhandled exceptional condition in *another* pod on the same node shouldn't be
+          # able to take this one down, and vice versa). Starting values are conservative
+          # guesses for a small Fastify API with no in-process cache; revisit after real load
+          # testing - see comment at top of file.
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+      volumes:
+        - name: tmp
+          emptyDir: {}

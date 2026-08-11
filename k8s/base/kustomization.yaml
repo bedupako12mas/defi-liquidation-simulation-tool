@@ -1,0 +1,12 @@
+# k8s/base/kustomization.yaml
+#
+# Base resources shared by every environment. Overlays (../overlays/staging,
+# ../overlays/prod) reference this via `resources: [../../base]` and patch what differs -
+# see the top-level k8s README-equivalent explanation in DEPLOYMENT.md for why kustomize
+# was chosen over Helm for this project.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml

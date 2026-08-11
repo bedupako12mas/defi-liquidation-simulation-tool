@@ -1,0 +1,22 @@
+# k8s/overlays/prod/kustomization.yaml
+#
+# Same base manifests as staging, different values (context.md §9). Deployed on push to
+# `main` (see .github/workflows/deploy.yml), gated the same way staging is - nothing about
+# prod deploys skips CI.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: liquidation-sim-prod
+
+commonLabels:
+  environment: prod
+
+patches:
+  - path: patch-deployment.yaml
+  - path: patch-ingress.yaml
+
+# See staging/kustomization.yaml's comment: `images:` is set at deploy time by CI via
+# `kustomize edit set image`, never committed here.

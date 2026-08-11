@@ -1,0 +1,229 @@
+# .github/workflows/ci.yml
+#
+# NOTE ON SCOPE: this targets v2/api and v2/web, which don't exist yet (see context.md -
+# the real backend is being built separately from the app/ demo). Every job below guards on
+# the target directory actually existing and no-ops with a ::notice:: instead of hard-failing
+# if it doesn't, so this workflow can be merged now (green) without lying about coverage it
+# doesn't have yet. TODO once v2/api and v2/web exist: delete the "Check <path> exists" guard
+# steps and the corresponding `if:` conditions - they're scaffolding, not permanent.
+#
+# `deploy.yml` triggers on completion of this workflow (via workflow_run) and only proceeds
+# if it concluded "success" - so a job failing anywhere here blocks a deploy. That's the gate
+# item 3 asks for; see the `ci-gate` job at the bottom for the single required check.
+
+name: CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref instead of letting stale CI results race a deploy
+# decision (OWASP A06 - Insecure Design: don't let an old, already-superseded run's green
+# checkmark be the one a human or workflow_run trigger acts on).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least-privilege default (OWASP A02 - Security Misconfiguration): GITHUB_TOKEN gets nothing
+# beyond read access unless a specific job below opts into more, and says why.
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22" # matches v2/api/Dockerfile's node:22-slim
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # lint + typecheck + test + dependency audit + build, per service.
+  # ---------------------------------------------------------------------------
+  checks:
+    name: checks (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: v2-api
+            path: v2/api
+          - name: v2-web
+            path: v2/web
+    # `actions: read` is needed only for the "scan this job's own logs" step below, which
+    # calls `gh run view --log`. Nothing else in this job needs it.
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check ${{ matrix.path }} exists
+        id: exists
+        run: |
+          if [ -f "${{ matrix.path }}/package.json" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ matrix.path }}/package.json not found yet - this job is a no-op until v2 exists (see ci.yml header comment)."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.exists.outputs.found == 'true'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ matrix.path }}/package-lock.json
+
+      # npm ci, not npm install: fails closed on a lockfile mismatch instead of silently
+      # re-resolving dependency versions in CI (OWASP A03 - Software Supply Chain Failures).
+      - name: Install dependencies
+        if: steps.exists.outputs.found == 'true'
+        working-directory: ${{ matrix.path }}
+        run: npm ci
+
+      - name: Lint
+        if: steps.exists.outputs.found == 'true'
+        working-directory: ${{ matrix.path }}
+        run: npm run lint --if-present
+
+      - name: Typecheck
+        if: steps.exists.outputs.found == 'true'
+        working-directory: ${{ matrix.path }}
+        run: npm run typecheck --if-present
+
+      - name: Test
+        if: steps.exists.outputs.found == 'true'
+        working-directory: ${{ matrix.path }}
+        run: npm run test --if-present
+
+      # Dependabot (.github/dependabot.yml) opens PRs for outdated/vulnerable deps on a
+      # weekly cadence; this is the synchronous complement - it fails *this* build the moment
+      # a HIGH/CRITICAL-severity known vuln is in the dependency tree, rather than waiting for
+      # next week's PR. OWASP A03.
+      - name: Dependency audit
+        if: steps.exists.outputs.found == 'true'
+        working-directory: ${{ matrix.path }}
+        run: npm audit --audit-level=high
+
+      - name: Build
+        if: steps.exists.outputs.found == 'true'
+        working-directory: ${{ matrix.path }}
+        run: npm run build --if-present
+
+      # OWASP A09 (Security Logging and Alerting Failures) + A02 (Misconfiguration): GitHub's
+      # built-in log masking only redacts an *exact* string already registered as a
+      # `secrets.*` value. It does not catch a secret that got base64-encoded, concatenated
+      # with other text, printed via a stray `env`/`printenv`/`set -x`, or was never
+      # registered as a GitHub secret at all (e.g. a Vault-issued token minted at runtime).
+      # CI logs are readable by anyone with repo read access and persist indefinitely, so this
+      # sweeps the *actual rendered logs* of this job for known secret-shaped patterns instead
+      # of trusting the masking mechanism blindly.
+      - name: Verify no secret patterns leaked into this job's logs
+        if: steps.exists.outputs.found == 'true' && always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run view "${{ github.run_id }}" --log > /tmp/job-log.txt || true
+          PATTERN='(AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|gh[oprsu]_[A-Za-z0-9]{36}|xox[baprs]-[A-Za-z0-9-]+|-----BEGIN[A-Z ]*PRIVATE KEY-----|hvs\.[A-Za-z0-9]{24,}|AIza[0-9A-Za-z_-]{35})'
+          if grep -qiE "$PATTERN" /tmp/job-log.txt; then
+            echo "::error::Potential secret pattern found in this job's CI logs - failing the build. See the comment above this step in ci.yml for why."
+            exit 1
+          fi
+          rm -f /tmp/job-log.txt
+
+  # ---------------------------------------------------------------------------
+  # Build the container image and scan it - separate job because it needs `docker build`,
+  # not just `npm run build`, and because the SARIF upload needs its own permission grant.
+  # ---------------------------------------------------------------------------
+  image-scan:
+    name: Trivy image scan (v2/api)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # only this job gets it, only to upload the SARIF scan result
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check v2/api exists
+        id: exists
+        run: |
+          if [ -f "v2/api/package.json" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::v2/api/package.json not found yet - image build/scan skipped until the real API exists."
+          fi
+
+      - name: Build image
+        if: steps.exists.outputs.found == 'true'
+        run: docker build -t v2-api:ci -f v2/api/Dockerfile v2/api
+
+      # CIS Docker Benchmark (image scanning) + OWASP A03: fail the build on known HIGH/
+      # CRITICAL vulnerabilities in the base image or dependency layers before anything is
+      # pushed to a registry a deploy job could pull from.
+      # TODO: pin this action to a commit digest (same registry-access limitation noted in
+      # v2/api/Dockerfile applies to resolving third-party Action digests from here).
+      - name: Trivy scan
+        if: steps.exists.outputs.found == 'true'
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: v2-api:ci
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Upload Trivy results to code scanning
+        if: steps.exists.outputs.found == 'true' && always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+  # ---------------------------------------------------------------------------
+  # gitleaks against the FULL git history, not just this push's diff. A secret is
+  # compromised the moment it is ever committed - reachable via `git log -p` /
+  # `git show <old-sha>` for as long as the repo exists - even if a later commit deletes it.
+  # A diff-only scan (the default for most "scan on push" setups) would only ever catch a
+  # secret on the commit that introduces it and would miss one that already exists deeper in
+  # history (e.g. from before this workflow was added, or from a squash/rebase that hid it
+  # from a shallow diff). `fetch-depth: 0` below is what makes the difference - without it,
+  # actions/checkout only fetches the single commit being built, and gitleaks would have
+  # nothing to scan. Config: gitleaks.toml at repo root (extends gitleaks' own default
+  # ruleset, adds an allowlist for known-synthetic fixture paths).
+  # ---------------------------------------------------------------------------
+  gitleaks:
+    name: gitleaks (full history)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, deliberately - see comment above
+
+      # TODO: pin to a commit digest once this has run at least once and a real Action
+      # release can be resolved (same registry/network-access limitation as elsewhere in
+      # this file and in v2/api/Dockerfile).
+      - name: Run gitleaks against full history
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: gitleaks.toml
+
+  # ---------------------------------------------------------------------------
+  # Single required status check: branch protection (a human sets this up in repo settings,
+  # see DEPLOYMENT.md) points at this job, and deploy.yml's workflow_run trigger effectively
+  # depends on it too, since a failure here fails the whole workflow's conclusion.
+  # ---------------------------------------------------------------------------
+  ci-gate:
+    name: CI gate
+    runs-on: ubuntu-latest
+    needs: [checks, image-scan, gitleaks]
+    if: always()
+    steps:
+      - name: Fail if any required job failed or was cancelled
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more required CI jobs did not succeed - blocking deploy."
+            exit 1
+          fi

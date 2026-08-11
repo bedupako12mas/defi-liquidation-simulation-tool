@@ -1,0 +1,19 @@
+# PLACEHOLDER HOSTNAME - no real domain/DNS/Cloudflare zone exists yet for staging. Replace
+# with the real subdomain once one is registered and pointed at Cloudflare (see
+# DEPLOYMENT.md).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: v2-api
+spec:
+  rules:
+    - host: staging-api.example.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: v2-api
+                port:
+                  name: http

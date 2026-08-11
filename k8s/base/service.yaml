@@ -1,0 +1,20 @@
+# k8s/base/service.yaml
+#
+# ClusterIP only - this Service is not exposed directly; k8s/base/ingress.yaml fronts it,
+# and Cloudflare fronts that (context.md §9: Cloudflare at the edge for rate limiting and
+# caching). Nothing about this workload needs a LoadBalancer/NodePort of its own.
+apiVersion: v1
+kind: Service
+metadata:
+  name: v2-api
+  labels:
+    app.kubernetes.io/name: v2-api
+    app.kubernetes.io/part-of: liquidation-simulator
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: v2-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http # named port from deployment.yaml's containerPort

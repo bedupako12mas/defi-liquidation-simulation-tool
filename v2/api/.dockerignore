@@ -1,0 +1,18 @@
+# Keep the build context (and therefore the image, and therefore anything Trivy has to scan)
+# free of anything that isn't needed to build/run the API. Also a supply-chain guardrail
+# (OWASP A03): if a .env with real values ever exists locally next to this Dockerfile, it
+# must never be picked up by `docker build`'s COPY . . in the builder stage.
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+.git
+.github
+.vscode
+.idea
+coverage
+*.md
+Dockerfile
+.dockerignore

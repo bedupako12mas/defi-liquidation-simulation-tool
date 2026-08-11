@@ -1,0 +1,44 @@
+# k8s/base/ingress.yaml
+#
+# Origin-facing Ingress. Cloudflare (context.md §9) sits in front of this as the actual edge -
+# it terminates the public TLS connection, does rate limiting and caching, and proxies to
+# whatever this Ingress's LoadBalancer IP is. That means:
+#   - Rate limiting lives in Cloudflare config (dashboard or Terraform, not this repo's k8s
+#     manifests) - not duplicated here, per context.md §10's "rate limiting at the edge."
+#   - TLS here can reasonably be DO's managed LB / cert-manager doing origin certs, or even
+#     Cloudflare "Full (strict)" mode with a Cloudflare Origin CA cert - a real decision to
+#     make once the DOKS cluster and Cloudflare zone both exist (see DEPLOYMENT.md).
+#
+# `ingressClassName: nginx` assumes the ingress-nginx controller (DOKS's common 1-click
+# marketplace install). TODO: confirm once the real cluster exists - if DigitalOcean's native
+# LB annotations end up preferred instead, this whole resource's shape changes, not just a
+# value, so don't treat this as a safe-to-ignore placeholder like the hostname below.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: v2-api
+  labels:
+    app.kubernetes.io/name: v2-api
+    app.kubernetes.io/part-of: liquidation-simulator
+  annotations:
+    # Belt-and-suspenders body size cap even though Cloudflare should be the primary defense
+    # against oversized requests reaching the origin at all (context.md §10 "denial of
+    # wallet" - the sweep endpoint's real cost cap is server-side in the app itself; this is
+    # just a coarse backstop at the ingress layer).
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+spec:
+  ingressClassName: nginx
+  rules:
+    # PLACEHOLDER HOSTNAME - overlays/*/patch-ingress.yaml replaces this per environment.
+    # No real domain has been registered/pointed at Cloudflare yet; do not treat
+    # "api.example.invalid" as anything other than "must be replaced before this works."
+    - host: api.example.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: v2-api
+                port:
+                  name: http

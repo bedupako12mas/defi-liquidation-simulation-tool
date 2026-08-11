@@ -1,0 +1,27 @@
+# Strategic merge patch over k8s/base/deployment.yaml - prod values only.
+# 2 replicas as a floor for availability during a rolling update (one pod always serving
+# while the other cycles) - not a measured capacity number, since there's no real traffic
+# yet. Revisit alongside the resource requests/limits below once this has actually been
+# load-tested (same caveat as k8s/base/deployment.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: v2-api
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: v2-api
+          env:
+            - name: PORT
+              value: "4000"
+            - name: NODE_ENV
+              value: production
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "192Mi"
+            limits:
+              cpu: "750m"
+              memory: "384Mi"

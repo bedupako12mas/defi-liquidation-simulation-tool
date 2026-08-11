@@ -1,0 +1,37 @@
+# gitleaks.toml
+#
+# Config for gitleaks (https://github.com/gitleaks/gitleaks), run in CI against the FULL git
+# history, not just the current diff - see the "gitleaks (full history)" job added in
+# .github/workflows/ci.yml for why that distinction matters (short version: a secret that
+# was committed and later "removed" in a follow-up commit is still sitting in a git object
+# forever, reachable by anyone who clones the repo and runs `git log -p`, until history is
+# rewritten - a diff-only scan on the latest commit would never see it).
+#
+# Extends gitleaks' own maintained default ruleset (AWS keys, GitHub/GitLab tokens, private
+# key blocks, generic high-entropy secrets, etc.) rather than re-inventing pattern coverage -
+# that ruleset is broader and better-maintained than anything worth hand-rolling here.
+title = "liquidation-simulator gitleaks config"
+
+[extend]
+useDefault = true
+
+# No [[rules]] additions yet - none of this project's known constants (contract addresses,
+# public RPC endpoints, chain IDs, Aave/Fluid protocol parameters per context.md §4/§5) look
+# secret-shaped, so the default ruleset's false-positive surface here should be small. Add a
+# project-specific rule here if a real proprietary secret format shows up later (e.g. a
+# BetterStack or Vault-issued token with a recognizable prefix) - don't add one speculatively
+# for a format that doesn't exist yet.
+
+[allowlist]
+description = "Paths that are expected to contain synthetic/example data, not real secrets"
+paths = [
+  # app/api/src/fixtures - explicitly synthetic data per docs/demo/DEMO_GUIDE.md §2
+  # ("Everything under fixtures/ is synthetic scaffolding"). Not a secrets concern, but
+  # excluding it avoids gitleaks wasting time/false-positives on large generated fixture
+  # files.
+  '''app/api/src/fixtures/.*''',
+  # Example/template env files are meant to show variable *names*, not real values - see
+  # the .gitignore carve-out for .env.example / .env.*.example.
+  '''\.env\.example$''',
+  '''\.env\..*\.example$''',
+]

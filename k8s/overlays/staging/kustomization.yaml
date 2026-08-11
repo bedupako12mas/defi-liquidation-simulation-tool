@@ -1,0 +1,28 @@
+# k8s/overlays/staging/kustomization.yaml
+#
+# Staging = same base manifests as prod, different values (context.md §9). Deployed on push
+# to the `staging` branch (see .github/workflows/deploy.yml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+# Namespace isolation between environments on the same DOKS cluster - if staging and prod
+# ever share a cluster (a real cost-saving option on a small DOKS setup), this alone keeps
+# their Services/Ingresses/NetworkPolicies from colliding, and scopes RBAC/Vault policies
+# per-namespace (OWASP A06 - Insecure Design: blast radius containment, not an afterthought).
+namespace: liquidation-sim-staging
+
+commonLabels:
+  environment: staging
+
+patches:
+  - path: patch-deployment.yaml
+  - path: patch-ingress.yaml
+
+# Intentionally NOT set here: `images:`. deploy.yml runs `kustomize edit set image
+# v2-api=<registry>/v2-api@sha256:<digest>` against a checked-out copy of this file
+# immediately before `kubectl apply -k`, using the exact digest CI just built and Trivy-
+# scanned - so the deployed image is always traceable to a specific scanned build, and this
+# committed file never has to carry a real (or fake) digest.

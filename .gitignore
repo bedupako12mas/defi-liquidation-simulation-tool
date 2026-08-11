@@ -1,0 +1,74 @@
+# -----------------------------------------------------------------------------
+# Secrets & credentials
+# context.md §10 / OWASP A02 (Security Misconfiguration): the single most common way a
+# secret ends up in git history is a developer laptop committing a local env file or a
+# downloaded kubeconfig "just this once". Nothing under these patterns should ever be
+# staged. Actual secrets live in Vault; anything matching these patterns locally is either
+# a local dev convenience file or a credential that leaked onto disk, never something to
+# commit either way.
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+id_rsa*
+id_ed25519*
+*.gpg
+*credentials*.json
+*credentials*.yaml
+*credentials*.yml
+secrets.yaml
+secrets.yml
+secrets.json
+vault-token*
+.vault-token
+
+# Kubeconfigs — `doctl kubernetes cluster kubeconfig save` writes one of these locally;
+# it is a bearer credential for the whole cluster and must never be committed (context.md
+# §10 infra requirements; CIS Kubernetes Benchmark treats kubeconfig exposure as a direct
+# cluster-admin compromise path).
+kubeconfig*
+*.kubeconfig
+.kube/config
+
+# Terraform / IaC state can embed resolved secret values in plaintext.
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# -----------------------------------------------------------------------------
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+
+# -----------------------------------------------------------------------------
+# Build output
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+coverage/
+.turbo/
+
+# -----------------------------------------------------------------------------
+# Logs & OS/editor cruft
+*.log
+npm-debug.log*
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# -----------------------------------------------------------------------------
+# Local scan output (Trivy/gitleaks reports written to disk during local runs)
+trivy-results.*
+gitleaks-report.*
