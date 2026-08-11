@@ -165,7 +165,7 @@ jobs:
       # v2/api/Dockerfile applies to resolving third-party Action digests from here).
       - name: Trivy scan
         if: steps.exists.outputs.found == 'true'
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: v2-api:ci
           format: sarif
@@ -209,6 +209,10 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITLEAKS_CONFIG: gitleaks.toml
+          # Breaking change in gitleaks-action: GITHUB_TOKEN is now required to scan PRs
+          # (it uses the API to fetch PR diff context), not just push events. Without this,
+          # every pull_request-triggered run fails at this step regardless of PR content.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # Single required status check: branch protection (a human sets this up in repo settings,
