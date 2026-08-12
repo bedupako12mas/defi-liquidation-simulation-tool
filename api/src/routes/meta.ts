@@ -19,7 +19,13 @@ const LIMITATIONS = [
   "protocol_params does not carry per-asset liquidation incentive/bonus - the methodology " +
     "table's incentive figures are derived live from Aave's PoolDataProvider, not the DB.",
   "The Aave indexer's initial backfill is bounded (~50,000 blocks), not a full historical " +
-    "scan from Aave V3's mainnet launch - demo-scale by design, not an oversight.",
+    "scan from Aave V3's mainnet launch - demo-scale by design, not an oversight. As a direct " +
+    "consequence, this deployment currently holds a small real sample of positions (not " +
+    "thousands) - every count and curve shown (toxic-position count, liquidatable collateral, " +
+    "bad debt, the per-position drilldown) demonstrates the mechanism correctly on real " +
+    "on-chain data, but is not yet a statistically representative measure of Aave's actual " +
+    "risk book. Both scale up automatically with a wider backfill window - same code, same " +
+    "data path, just a longer indexer run, no redeploy logic changes required.",
   "Two different confidence levels are blended in this tool, and they shouldn't be read as " +
     "equally certain. Health factor / LTV are exact, real liquidation-formula math, " +
     "empirically checked against Aave's own on-chain getUserAccountData() (matched to " +
