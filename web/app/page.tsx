@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 import { CapabilitiesProvider, useCapabilities } from "@/lib/hooks/useCapabilities";
+import { USE_MOCK } from "@/lib/api/meta";
 import { OverviewTab } from "@/components/tabs/OverviewTab";
 import { MethodologyTab } from "@/components/tabs/MethodologyTab";
 import { CascadeDetailTab } from "@/components/tabs/CascadeDetailTab";
@@ -37,7 +38,7 @@ function TabContent({ active }: { active: TabId }) {
 
 function AppShell() {
   const [active, setActive] = useState<TabId>("overview");
-  const { capabilities } = useCapabilities();
+  const { capabilities, meta } = useCapabilities();
 
   return (
     <div className="container">
@@ -50,14 +51,26 @@ function AppShell() {
         </p>
       </header>
 
-      <div className="banner banner-info">
-        <strong>MOCK API MODE.</strong> <code>api</code> has no server/routes yet (see
-        docs/flow.md) - every number on this page comes from{" "}
-        <code>scripts/generate-mock-fixtures.ts</code>, which runs the real, tested{" "}
-        <code>api/src/engine</code> against illustrative fixture positions, not from chain
-        and not from a live API. See <code>lib/api/meta.ts</code> for the exact swap point once
-        the real API exists.
-      </div>
+      {USE_MOCK ? (
+        <div className="banner banner-info">
+          <strong>MOCK API MODE.</strong> <code>NEXT_PUBLIC_USE_MOCK_API</code> is not set to{" "}
+          <code>false</code> - every number on this page comes from{" "}
+          <code>scripts/generate-mock-fixtures.ts</code>, which runs the real, tested{" "}
+          <code>api/src/engine</code> against illustrative fixture positions, not from chain
+          and not from a live API. See <code>lib/api/meta.ts</code> for the swap point.
+        </div>
+      ) : (
+        <div className="banner banner-info">
+          <strong>LIVE DATA.</strong> Real Aave V3 positions from the connected backend
+          {meta?.pinnedBlock ? (
+            <>
+              , pinned at block <code>{meta.pinnedBlock}</code>
+            </>
+          ) : null}
+          . Fluid T1 is not wired up yet - see the Methodology tab for the full,
+          current list of limitations.
+        </div>
+      )}
 
       <nav className="tab-nav">
         {TABS.map((tab) => (
