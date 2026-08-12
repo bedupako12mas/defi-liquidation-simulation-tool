@@ -15,7 +15,7 @@
 
 export interface ValidationResult {
   // Placeholder shape - intentionally not fleshed out. Milestone 2 defines the real
-  // Tier1-vs-Tier2 comparison shape once the fork replay endpoint exists.
+  // Stateless-vs-Validation comparison shape once the fork replay endpoint exists.
   status: "not-implemented";
 }
 
