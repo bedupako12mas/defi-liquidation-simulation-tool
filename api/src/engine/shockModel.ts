@@ -75,3 +75,19 @@ export function applyShock(
   }
   return shocked;
 }
+
+/**
+ * Safe presetId lookup - `SHOCK_PRESETS[presetId as keyof typeof SHOCK_PRESETS]` (what
+ * two API routes originally did independently) inherits Object.prototype, so a caller
+ * passing presetId=constructor/toString/hasOwnProperty/valueOf resolves to a truthy
+ * function instead of undefined, bypassing an `if (!preset)` guard entirely - confirmed
+ * live in review, and it crashes downstream (`preset.depegSpread` is undefined, so
+ * applyShock's multiplier becomes NaN, and BigInt(NaN) throws a RangeError). Guarding
+ * with hasOwnProperty closes that off at the one place both callers should share, instead
+ * of two independent copies of the same fragile lookup.
+ */
+export function getShockPreset(presetId: string | undefined): ShockPreset | undefined {
+  if (presetId === undefined) return undefined;
+  if (!Object.prototype.hasOwnProperty.call(SHOCK_PRESETS, presetId)) return undefined;
+  return SHOCK_PRESETS[presetId as keyof typeof SHOCK_PRESETS];
+}

@@ -4,9 +4,10 @@
 # kustomize overlays (k8s/overlays/*) - same manifest, different values, per the confirmed
 # tech stack's "staging + prod for everything, same manifests, different values" requirement.
 #
-# api doesn't exist yet, so `image` below is a placeholder (see comment on that field) and
-# every value here is a starting point, not a measured one - a human should revisit
-# resources.* once the real app has been load-tested.
+# api is real now (src/server.ts, real routes, real Dockerfile) - `image` below is still a
+# placeholder (see comment on that field, still accurate: CI sets the real one at deploy
+# time) and every resource value here is still a starting point, not a measured one - a
+# human should revisit resources.* once the real app has been load-tested.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -83,24 +84,61 @@ spec:
           ports:
             - name: http
               containerPort: 4000 # matches PORT default in api/Dockerfile
+          # -----------------------------------------------------------------------------
+          # TEMPORARY BRIDGE, not the target state - see the Vault comment above. Without
+          # something here, the pod crash-loops immediately: src/server.ts's
+          # assertAllowedChain() and src/db/client.ts both throw at startup if
+          # RPC_URL_MAINNET / DATABASE_URL are unset, and there is currently no real Vault
+          # instance to inject them. Until Vault is actually stood up (DEPLOYMENT.md §4),
+          # a human creates a plain Kubernetes Secret out of band, once per namespace, and
+          # this references it by name:
+          #
+          #   kubectl create secret generic api-secrets \
+          #     --namespace liquidation-sim-<env> \
+          #     --from-literal=DATABASE_URL='<real prod connection string>' \
+          #     --from-literal=RPC_URL_MAINNET='<real Alchemy URL>'
+          #
+          # Never committed, never typed into chat/CI - same "human types the real value"
+          # discipline as every other secret in this project, just via kubectl instead of
+          # a Vault UI. Delete this envFrom block (and the Secret) the day the Vault
+          # annotations above go live - the two mechanisms should never both be wiring the
+          # same env vars in at once.
+          envFrom:
+            - secretRef:
+                name: api-secrets
           env:
             - name: PORT
               value: "4000"
+            # TEMPORARY, same reasoning as sslmode=require (not verify-full) in
+            # docs/decisions.md's DB-layer commit: DigitalOcean managed Postgres's
+            # certificate isn't in Node's default trusted root store, and recent
+            # pg-connection-string versions now treat sslmode=require as strict
+            # verify-full semantics by default, which fails with "self-signed
+            # certificate in certificate chain" otherwise - confirmed live while
+            # running the migration against real prod Postgres. This disables TLS
+            # certificate verification process-wide (blunt, not scoped to just the DB
+            # connection) - acceptable for tonight (connection is still encrypted, not
+            # plaintext), not the end state. Revisit alongside the Vault migration:
+            # either pass the real DO CA cert to `pg`'s `ssl.ca` option, or add
+            # `uselibpqcompat=true` to the connection string for the old lenient
+            # `require` behavior instead of this global flag.
+            - name: NODE_TLS_REJECT_UNAUTHORIZED
+              value: "0"
           securityContext:
             readOnlyRootFilesystem: true # CIS Docker/K8s Benchmark - paired with the Dockerfile writing nothing to its own image at runtime
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-          # The app writes nothing to disk (Fastify logs to stdout - see app/api/src/server.ts's
-          # `logger: true` pattern, which api is expected to follow), so the only thing that
+          # The app writes nothing to disk (Fastify logs to stdout - confirmed against the
+          # real api/src/server.ts's `logger: true`), so the only thing that
           # needs a writable mount under a read-only root fs is a scratch /tmp, in case Node or
           # a dependency ever wants one (e.g. for a temp file during a require()). Cheap
           # insurance, not a sign the app is expected to use it.
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-          # Liveness/readiness both hit GET /health (app/api/src/server.ts's existing route;
-          # api is expected to keep it). Distinct probes because they answer distinct
+          # Liveness/readiness both hit GET /health (confirmed live against the real
+          # server - see docs/decisions.md's API-routes entry). Distinct probes because they answer distinct
           # questions: readiness gates whether the Service sends traffic here at all (matters
           # a lot right after a rolling deploy); liveness decides whether to restart a pod
           # that's alive-but-wedged (OWASP A09 - want a signal beyond "the process exists").

@@ -5,11 +5,17 @@
 # ci.yml having succeeded for that exact commit (see the `workflow_run` trigger below), so
 # there is no path from a red build to a running pod.
 #
-# NOTE: this cannot actually deploy anything yet. It needs, at minimum: a real DOKS cluster,
-# a container registry, and GitHub Actions secrets (DIGITALOCEAN_ACCESS_TOKEN, registry
-# creds) - none of which exist. See DEPLOYMENT.md for exactly what a human has to create by
-# hand before this workflow's first real run. Everything below is written to be correct once
-# those exist, not faked to look like it runs today.
+# Requires these GitHub Actions secrets to exist (a human creates them, see DEPLOYMENT.md):
+#   DIGITALOCEAN_ACCESS_TOKEN  - DO API token, scoped to registry + Kubernetes
+#   DOKS_CLUSTER_NAME_STAGING  - the real staging cluster's name (doctl kubernetes cluster list)
+#   DOKS_CLUSTER_NAME_PROD     - the real prod cluster's name
+#   DOCR_REGISTRY              - e.g. registry.digitalocean.com/<your-registry-name>
+# The application's own runtime secrets (RPC_URL_MAINNET, DATABASE_URL) never pass through
+# this workflow - they're injected into the pod directly (Vault, or the temporary
+# kubectl-created Secret documented in k8s/base/deployment.yaml), never via Actions. This
+# workflow's DIGITALOCEAN_ACCESS_TOKEN is a CI-scoped infra credential (lets Actions reach
+# the DOKS control plane to apply manifests) - a different thing from the app's own secrets,
+# and conflating the two would mean app secrets transit CI logs/context (context.md §10).
 
 name: Deploy
 
@@ -34,91 +40,76 @@ jobs:
   deploy-staging:
     name: Deploy staging
     runs-on: ubuntu-latest
-    # Only proceed if (a) the triggering CI run actually succeeded, not just completed, and
-    # (b) it ran for the staging branch specifically. This is the actual gate item 3/5 asks
-    # for: a failing or errored ci-gate job (ci.yml) makes `conclusion` anything other than
-    # "success", and this whole job is skipped.
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'staging'
     environment: staging # a human configures required reviewers / protection rules on this GitHub Environment - see DEPLOYMENT.md
+    env:
+      REGISTRY: ${{ secrets.DOCR_REGISTRY }}
+      IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }} # deploy the exact commit CI just validated, not whatever HEAD has drifted to since
 
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Authenticate Docker to DOCR
+        run: doctl registry login --expiry-seconds 600
+
       - name: Build and push image
         run: |
-          echo "TODO: this step needs a real container registry (DOCR/GHCR/etc.) and a"
-          echo "GitHub Actions secret with push credentials - see DEPLOYMENT.md. Sketch of"
-          echo "what belongs here once that exists:"
-          echo "  docker build -t \$REGISTRY/api:\$GITHUB_SHA -f api/Dockerfile api"
-          echo "  docker push \$REGISTRY/api:\$GITHUB_SHA"
-          echo "  # then resolve the pushed digest for the kustomize step below, e.g.:"
-          echo "  # docker inspect --format='{{index .RepoDigests 0}}' \$REGISTRY/api:\$GITHUB_SHA"
-          exit 1 # deliberately fails closed - this is a stub, not a working deploy step
+          docker build -t "$REGISTRY/api:$IMAGE_TAG" -f api/Dockerfile api
+          docker push "$REGISTRY/api:$IMAGE_TAG"
+          echo "DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$REGISTRY/api:$IMAGE_TAG")" >> "$GITHUB_ENV"
 
-      # NOTE ON THE SECRET NAME BELOW: deliberately NOT written as a live ${{ secrets.X }}
-      # expression in this stub - GitHub Actions interpolates that syntax at parse time
-      # even inside an `echo`, before bash ever sees it, which is exactly the kind of thing
-      # ci.yml's "no secret patterns in logs" check exists to catch. Referencing a secret by
-      # name in a comment is fine; letting its value flow into an echo/print is not, even in
-      # placeholder code. When this step becomes real, use `doctl auth init -t "$TOKEN"`
-      # with TOKEN set via `env:`, never inlined into a shell string directly from `secrets.*`.
       - name: Authenticate to DOKS
-        run: |
-          echo "TODO: needs the doctl CLI, a GitHub Actions secret holding a DO API token"
-          echo "(name it DIGITALOCEAN_ACCESS_TOKEN), and a real cluster name. Sketch, once"
-          echo "the cluster exists (see DEPLOYMENT.md):"
-          echo "  doctl auth init -t \"\$TOKEN\"   # TOKEN populated via env:, not inlined here"
-          echo "  doctl kubernetes cluster kubeconfig save <staging-cluster-name>"
-          echo "Credential boundary worth being explicit about: that DO API token lets"
-          echo "Actions reach the DOKS control plane to apply manifests - a CI-scoped infra"
-          echo "credential, stored as a GitHub encrypted secret, rotated by whoever owns the"
-          echo "DO account. It is NOT the application's own runtime secrets (RPC URLs, DB"
-          echo "creds, etc.) - those come from Vault Agent injection inside the pod"
-          echo "(k8s/base/deployment.yaml) and never pass through Actions at all. Conflating"
-          echo "the two would mean app secrets transit CI logs/context - exactly what"
-          echo "context.md §10 says not to do."
-          exit 1
+        run: doctl kubernetes cluster kubeconfig save "${{ secrets.DOKS_CLUSTER_NAME_STAGING }}"
 
       - name: Set image and apply staging overlay
         run: |
-          echo "TODO: once the two steps above are real, this becomes:"
-          echo "  cd k8s/overlays/staging"
-          echo "  kustomize edit set image api=\$REGISTRY/api@\$PUSHED_DIGEST"
-          echo "  kubectl apply -k ."
-          echo "  kubectl rollout status deployment/api -n liquidation-sim-staging --timeout=120s"
-          echo "kustomize edit set image writes into a CI-local checkout only, never commits"
-          echo "back - k8s/overlays/staging/kustomization.yaml in git never carries a real"
-          echo "image reference (see the comment in that file)."
-          exit 1
+          cd k8s/overlays/staging
+          # kustomize edit set image writes into this CI-local checkout only, never commits
+          # back - k8s/overlays/staging/kustomization.yaml in git never carries a real image
+          # reference (see the comment in that file).
+          npx kustomize edit set image api="$DIGEST"
+          kubectl apply -k .
+          kubectl rollout status deployment/api -n liquidation-sim-staging --timeout=120s
 
   deploy-prod:
     name: Deploy prod
     runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
     environment: prod # a human configures required reviewers on this GitHub Environment - a manual approval gate in front of every prod deploy (see DEPLOYMENT.md)
+    env:
+      REGISTRY: ${{ secrets.DOCR_REGISTRY }}
+      IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Authenticate Docker to DOCR
+        run: doctl registry login --expiry-seconds 600
+
       - name: Build and push image
         run: |
-          echo "See deploy-staging's step of the same name - identical shape, different tag."
-          echo "TODO: real registry + credentials required, see DEPLOYMENT.md."
-          exit 1
+          docker build -t "$REGISTRY/api:$IMAGE_TAG" -f api/Dockerfile api
+          docker push "$REGISTRY/api:$IMAGE_TAG"
+          echo "DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$REGISTRY/api:$IMAGE_TAG")" >> "$GITHUB_ENV"
 
       - name: Authenticate to DOKS
-        run: |
-          echo "See deploy-staging's step of the same name - same doctl flow, prod cluster"
-          echo "name/kubeconfig context instead of staging's."
-          exit 1
+        run: doctl kubernetes cluster kubeconfig save "${{ secrets.DOKS_CLUSTER_NAME_PROD }}"
 
       - name: Set image and apply prod overlay
         run: |
-          echo "TODO: once real, this is:"
-          echo "  cd k8s/overlays/prod"
-          echo "  kustomize edit set image api=\$REGISTRY/api@\$PUSHED_DIGEST"
-          echo "  kubectl apply -k ."
-          echo "  kubectl rollout status deployment/api -n liquidation-sim-prod --timeout=120s"
-          exit 1
+          cd k8s/overlays/prod
+          npx kustomize edit set image api="$DIGEST"
+          kubectl apply -k .
+          kubectl rollout status deployment/api -n liquidation-sim-prod --timeout=120s

@@ -88,9 +88,29 @@ jobs:
         working-directory: ${{ matrix.path }}
         run: npm run typecheck --if-present
 
+      # api's own test suite spawns a real anvil, forked from RPC_URL_MAINNET at a pinned
+      # block (api/test/globalSetup.ts, api/vitest.config.ts) - a fresh GitHub-hosted
+      # runner has neither the anvil binary nor a real archive-capable RPC endpoint by
+      # default. This step installs anvil/forge/cast pinned to a known version via
+      # Foundry's own official action, matching the reasoning already written into
+      # docs/decisions.md ("Pinned anvil-fork test harness" entry - why foundry-toolchain,
+      # and why RPC_URL_MAINNET becomes a required secret once this commit lands). Scoped
+      # to the api matrix leg only - web's tests don't need a fork.
+      - name: Install Foundry (anvil/forge/cast)
+        if: matrix.name == 'api' && steps.exists.outputs.found == 'true'
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
       - name: Test
         if: steps.exists.outputs.found == 'true'
         working-directory: ${{ matrix.path }}
+        # RPC_URL_MAINNET must be a real archive-capable endpoint (an Alchemy app, not a
+        # free/public aggregator) - see the RPC-client commit's decisions entry for why a
+        # non-archive endpoint fails outright at a pinned historical block. Harmless,
+        # unused env var on the web matrix leg.
+        env:
+          RPC_URL_MAINNET: ${{ secrets.RPC_URL_MAINNET }}
         run: npm run test --if-present
 
       # Dependabot (.github/dependabot.yml) opens PRs for outdated/vulnerable deps on a
