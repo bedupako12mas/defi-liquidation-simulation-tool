@@ -29,8 +29,14 @@ export interface PositionsTable {
   id: Generated<number>;
   snapshot_id: number;
   user_address: string;
-  /** Array of { asset: string, amountRaw: string, decimals: number } - see docs/decisions.md. */
+  /** JSON-serialized engine/types.ts CollateralLeg[] (asset, amount, decimals,
+   *  liquidationThresholdBps), bigints as strings. Written by syncAaveSnapshot.ts - a
+   *  previous version of this comment hand-described a different, wrong shape
+   *  (amountRaw, no liquidationThresholdBps) that had already drifted from what's
+   *  actually written; pointing at the real type here instead, since that's the thing
+   *  that can't silently drift out of sync with itself. */
   collateral: ColumnType<unknown, unknown, unknown>;
+  /** JSON-serialized engine/types.ts DebtLeg[] (asset, amount, decimals), bigints as strings. */
   debt: ColumnType<unknown, unknown, unknown>;
   liquidation_incentive_bps: Numeric;
 }
