@@ -12,8 +12,12 @@ export function MethodologyTab() {
       <div className="card">
         <h2>The three position states</h2>
         <p className="preset-note" style={{ marginTop: 0, marginBottom: "1rem" }}>
-          At any shocked price, every position is in exactly one of three states (Warmuz,
-          Chaudhary &amp; Pinna, <em>Toxic Liquidation Spirals</em>, arXiv:2212.07306):
+          At any shocked price, every position is in exactly one of three states - a direct
+          algebraic consequence of the protocol&apos;s own liquidation threshold and bonus,
+          independently verifiable from those two numbers alone (a framing first written down
+          in Warmuz, Chaudhary &amp; Pinna&apos;s unreviewed preprint, <em>Toxic Liquidation
+          Spirals</em>, arXiv:2212.07306 - not itself peer-reviewed or cited here as
+          validation):
         </p>
         <div className="three-state-grid">
           <div className="three-state-cell">
@@ -38,9 +42,9 @@ export function MethodologyTab() {
               <span className="tag tag-toxic">Toxic</span>
             </div>
             <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-              Current LTV has crossed the UC frontier. Under the paper&apos;s Eq. 4, any
-              liquidation at the current fixed incentive is guaranteed to make LTV worse, not
-              better - the mechanism that produces bad debt, not merely a risk of it.
+              Current LTV has crossed the UC frontier. Any liquidation at the current fixed
+              incentive is now guaranteed to make LTV worse, not better - the mechanism that
+              produces bad debt, not merely a risk of it.
             </div>
           </div>
         </div>
@@ -54,8 +58,11 @@ export function MethodologyTab() {
         <h2>The undercollateralization frontier - LTV_UC = 1 / (1 + i)</h2>
         <p className="preset-note" style={{ marginTop: 0, marginBottom: "1rem" }}>
           A liquidation above this frontier is mathematically guaranteed to make the position
-          worse, not better (Warmuz, Chaudhary &amp; Pinna, arXiv:2212.07306). Low incentive
-          &rarr; high frontier &rarr; real headroom for a high liquidation threshold.
+          worse, not better - a direct algebraic consequence of the protocol&apos;s own
+          liquidation threshold and bonus, independently verifiable from those two numbers
+          alone (the same framing appears in Warmuz, Chaudhary &amp; Pinna&apos;s unreviewed
+          preprint, arXiv:2212.07306, not cited here as validation). Low incentive &rarr; high
+          frontier &rarr; real headroom for a high liquidation threshold.
         </p>
         {loading && <p className="loading">Loading...</p>}
         {error && <div className="banner">Error talking to the API: {error}.</div>}

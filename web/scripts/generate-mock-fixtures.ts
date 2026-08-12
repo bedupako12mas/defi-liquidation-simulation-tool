@@ -74,7 +74,7 @@ const AAVE_PARAMS: Record<string, AssetParams> = {
     liquidationThresholdBps: 8900n,
     liquidationIncentiveBps: 450n,
     provenance: "cited",
-    note: "Warmuz, Chaudhary & Pinna, arXiv:2212.07306 - the paper's own stated Nov-2022 CRV-incident figures (89% LT, 4.5% incentive).",
+    note: "Nov-2022 CRV-incident figures (89% LT, 4.5% incentive) as reported in Warmuz, Chaudhary & Pinna's unreviewed preprint, arXiv:2212.07306 - cited for the historical figures only, not as validation of the underlying math (which follows directly from the protocol's own threshold and bonus).",
   },
 };
 

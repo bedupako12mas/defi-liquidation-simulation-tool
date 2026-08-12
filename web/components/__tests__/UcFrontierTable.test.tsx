@@ -13,7 +13,7 @@ describe("UcFrontierTable", () => {
             incentivePct: 4.5,
             ucFrontierPct: 95.69,
             liquidationThresholdPct: 89,
-            provenance: "cited: arXiv:2212.07306",
+            provenance: "cited: live Aave V3 PoolDataProvider.getReserveConfigurationData(USDC)",
           },
           {
             protocol: "fluid",

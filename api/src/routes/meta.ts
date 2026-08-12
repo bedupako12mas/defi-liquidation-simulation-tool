@@ -20,6 +20,20 @@ const LIMITATIONS = [
     "table's incentive figures are derived live from Aave's PoolDataProvider, not the DB.",
   "The Aave indexer's initial backfill is bounded (~50,000 blocks), not a full historical " +
     "scan from Aave V3's mainnet launch - demo-scale by design, not an oversight.",
+  "Two different confidence levels are blended in this tool, and they shouldn't be read as " +
+    "equally certain. Health factor / LTV are exact, real liquidation-formula math, " +
+    "empirically checked against Aave's own on-chain getUserAccountData() (matched to " +
+    "within 10 bps on real positions). Bad debt is a simplified aggregate approximation " +
+    "(max(0, debt - collateral)) - it does not replicate the real contract's close-factor " +
+    "limits or per-asset seizure mechanics, and has not yet been checked against a real " +
+    "liquidation call's actual output the way health factor was. Closing that gap is a " +
+    "planned Validation-tier extension (eth_call against the real liquidation function with " +
+    "a price override), not yet built.",
+  "The undercollateralization-frontier figure (LTV past which any liquidation under this " +
+    "protocol's own fixed-bonus mechanism is guaranteed to worsen a position, not improve " +
+    "it) is a direct algebraic consequence of each protocol's own published liquidation " +
+    "threshold and bonus - independently verifiable from those two numbers alone, not " +
+    "borrowed authority from any external paper.",
 ];
 
 export function registerMetaRoute(app: FastifyInstance, deps: { db: Kysely<DB>; client: PublicClient }) {
