@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-13T06:33:59.314Z",
+  "generatedAt": "2026-08-13T10:09:25.666Z",
   "generatedBy": "web/scripts/generate-mock-fixtures.ts (real api/src/engine output, frozen)",
   "meta": {
     "mode": "demo",
@@ -30046,6 +30046,1204 @@
             "ucFrontierPct": 99.01,
             "state": "toxic",
             "badDebtUsd": 56100
+          }
+        ]
+      }
+    }
+  },
+  "killPrices": {
+    "correlated": {
+      "aave": [
+        {
+          "id": "aave-clusterA-0",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterA-1",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterA-2",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterA-3",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterA-4",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterB-0",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-clusterB-1",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-clusterB-2",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-clusterB-3",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-clusterB-4",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-scatter-0",
+          "killMagnitudePct": -46
+        },
+        {
+          "id": "aave-scatter-1",
+          "killMagnitudePct": -43
+        },
+        {
+          "id": "aave-scatter-2",
+          "killMagnitudePct": -39
+        },
+        {
+          "id": "aave-scatter-3",
+          "killMagnitudePct": -35
+        },
+        {
+          "id": "aave-scatter-4",
+          "killMagnitudePct": -32
+        },
+        {
+          "id": "aave-scatter-5",
+          "killMagnitudePct": -28
+        },
+        {
+          "id": "aave-scatter-6",
+          "killMagnitudePct": -25
+        },
+        {
+          "id": "aave-scatter-7",
+          "killMagnitudePct": -21
+        },
+        {
+          "id": "aave-correlated-0",
+          "killMagnitudePct": -25
+        },
+        {
+          "id": "aave-correlated-1",
+          "killMagnitudePct": -22
+        },
+        {
+          "id": "aave-correlated-2",
+          "killMagnitudePct": -18
+        },
+        {
+          "id": "aave-correlated-3",
+          "killMagnitudePct": -14
+        },
+        {
+          "id": "aave-correlated-4",
+          "killMagnitudePct": -11
+        }
+      ],
+      "fluid": [
+        {
+          "id": "fluid-correlated-0",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-1",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-2",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-3",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-4",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-5",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-6",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-7",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-8",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-9",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-10",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-11",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-12",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-13",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-14",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-uncorrelated-0",
+          "killMagnitudePct": -36
+        },
+        {
+          "id": "fluid-uncorrelated-1",
+          "killMagnitudePct": -31
+        },
+        {
+          "id": "fluid-uncorrelated-2",
+          "killMagnitudePct": -26
+        },
+        {
+          "id": "fluid-uncorrelated-3",
+          "killMagnitudePct": -22
+        },
+        {
+          "id": "fluid-uncorrelated-4",
+          "killMagnitudePct": -17
+        }
+      ]
+    },
+    "mild-depeg": {
+      "aave": [
+        {
+          "id": "aave-clusterA-0",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterA-1",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterA-2",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterA-3",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterA-4",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterB-0",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-clusterB-1",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-clusterB-2",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-clusterB-3",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-clusterB-4",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-scatter-0",
+          "killMagnitudePct": -46
+        },
+        {
+          "id": "aave-scatter-1",
+          "killMagnitudePct": -43
+        },
+        {
+          "id": "aave-scatter-2",
+          "killMagnitudePct": -39
+        },
+        {
+          "id": "aave-scatter-3",
+          "killMagnitudePct": -35
+        },
+        {
+          "id": "aave-scatter-4",
+          "killMagnitudePct": -32
+        },
+        {
+          "id": "aave-scatter-5",
+          "killMagnitudePct": -28
+        },
+        {
+          "id": "aave-scatter-6",
+          "killMagnitudePct": -25
+        },
+        {
+          "id": "aave-scatter-7",
+          "killMagnitudePct": -21
+        },
+        {
+          "id": "aave-correlated-0",
+          "killMagnitudePct": -24
+        },
+        {
+          "id": "aave-correlated-1",
+          "killMagnitudePct": -20
+        },
+        {
+          "id": "aave-correlated-2",
+          "killMagnitudePct": -16
+        },
+        {
+          "id": "aave-correlated-3",
+          "killMagnitudePct": -12
+        },
+        {
+          "id": "aave-correlated-4",
+          "killMagnitudePct": -9
+        }
+      ],
+      "fluid": [
+        {
+          "id": "fluid-correlated-0",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-1",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-2",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-3",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-4",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-5",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-6",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-7",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-8",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-9",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-10",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-11",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-12",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-13",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-14",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-uncorrelated-0",
+          "killMagnitudePct": -36
+        },
+        {
+          "id": "fluid-uncorrelated-1",
+          "killMagnitudePct": -31
+        },
+        {
+          "id": "fluid-uncorrelated-2",
+          "killMagnitudePct": -26
+        },
+        {
+          "id": "fluid-uncorrelated-3",
+          "killMagnitudePct": -22
+        },
+        {
+          "id": "fluid-uncorrelated-4",
+          "killMagnitudePct": -17
+        }
+      ]
+    },
+    "severe-depeg": {
+      "aave": [
+        {
+          "id": "aave-clusterA-0",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterA-1",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterA-2",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterA-3",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterA-4",
+          "killMagnitudePct": -10
+        },
+        {
+          "id": "aave-clusterB-0",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-clusterB-1",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-clusterB-2",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-clusterB-3",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-clusterB-4",
+          "killMagnitudePct": -5
+        },
+        {
+          "id": "aave-scatter-0",
+          "killMagnitudePct": -46
+        },
+        {
+          "id": "aave-scatter-1",
+          "killMagnitudePct": -43
+        },
+        {
+          "id": "aave-scatter-2",
+          "killMagnitudePct": -39
+        },
+        {
+          "id": "aave-scatter-3",
+          "killMagnitudePct": -35
+        },
+        {
+          "id": "aave-scatter-4",
+          "killMagnitudePct": -32
+        },
+        {
+          "id": "aave-scatter-5",
+          "killMagnitudePct": -28
+        },
+        {
+          "id": "aave-scatter-6",
+          "killMagnitudePct": -25
+        },
+        {
+          "id": "aave-scatter-7",
+          "killMagnitudePct": -21
+        },
+        {
+          "id": "aave-correlated-0",
+          "killMagnitudePct": -20
+        },
+        {
+          "id": "aave-correlated-1",
+          "killMagnitudePct": -16
+        },
+        {
+          "id": "aave-correlated-2",
+          "killMagnitudePct": -12
+        },
+        {
+          "id": "aave-correlated-3",
+          "killMagnitudePct": -8
+        },
+        {
+          "id": "aave-correlated-4",
+          "killMagnitudePct": -4
+        }
+      ],
+      "fluid": [
+        {
+          "id": "fluid-correlated-0",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-1",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-2",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-3",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-4",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-5",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-6",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-7",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-8",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-9",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-10",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-11",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-12",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-13",
+          "killMagnitudePct": null
+        },
+        {
+          "id": "fluid-correlated-14",
+          "killMagnitudePct": -1
+        },
+        {
+          "id": "fluid-uncorrelated-0",
+          "killMagnitudePct": -36
+        },
+        {
+          "id": "fluid-uncorrelated-1",
+          "killMagnitudePct": -31
+        },
+        {
+          "id": "fluid-uncorrelated-2",
+          "killMagnitudePct": -26
+        },
+        {
+          "id": "fluid-uncorrelated-3",
+          "killMagnitudePct": -22
+        },
+        {
+          "id": "fluid-uncorrelated-4",
+          "killMagnitudePct": -17
+        }
+      ]
+    }
+  },
+  "marketConcentration": {
+    "correlated": {
+      "aave": {
+        "0": [],
+        "-5": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 201450,
+            "contributingLegCount": 5
+          }
+        ],
+        "-10": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 426450,
+            "contributingLegCount": 10
+          }
+        ],
+        "-15": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 557100,
+            "contributingLegCount": 12
+          }
+        ],
+        "-20": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 603300,
+            "contributingLegCount": 13
+          }
+        ],
+        "-25": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 684750,
+            "contributingLegCount": 17
+          }
+        ],
+        "-30": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 699750,
+            "contributingLegCount": 18
+          }
+        ],
+        "-35": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 718950,
+            "contributingLegCount": 20
+          }
+        ],
+        "-40": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 724050,
+            "contributingLegCount": 21
+          }
+        ],
+        "-45": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 736050,
+            "contributingLegCount": 22
+          }
+        ],
+        "-50": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-55": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-60": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-65": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-70": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-75": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-80": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ]
+      },
+      "fluid": {
+        "0": [],
+        "-5": [],
+        "-10": [],
+        "-15": [],
+        "-20": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 78100,
+            "contributingLegCount": 1
+          }
+        ],
+        "-25": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 138400,
+            "contributingLegCount": 2
+          }
+        ],
+        "-30": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 182500,
+            "contributingLegCount": 3
+          }
+        ],
+        "-35": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 212000,
+            "contributingLegCount": 4
+          }
+        ],
+        "-40": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-45": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-50": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-55": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-60": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-65": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-70": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-75": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-80": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ]
+      }
+    },
+    "mild-depeg": {
+      "aave": {
+        "0": [],
+        "-5": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 201450,
+            "contributingLegCount": 5
+          }
+        ],
+        "-10": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 498450,
+            "contributingLegCount": 11
+          }
+        ],
+        "-15": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 557100,
+            "contributingLegCount": 12
+          }
+        ],
+        "-20": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 637950,
+            "contributingLegCount": 14
+          }
+        ],
+        "-25": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 684750,
+            "contributingLegCount": 17
+          }
+        ],
+        "-30": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 699750,
+            "contributingLegCount": 18
+          }
+        ],
+        "-35": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 718950,
+            "contributingLegCount": 20
+          }
+        ],
+        "-40": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 724050,
+            "contributingLegCount": 21
+          }
+        ],
+        "-45": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 736050,
+            "contributingLegCount": 22
+          }
+        ],
+        "-50": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-55": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-60": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-65": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-70": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-75": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-80": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ]
+      },
+      "fluid": {
+        "0": [],
+        "-5": [],
+        "-10": [],
+        "-15": [],
+        "-20": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 78100,
+            "contributingLegCount": 1
+          }
+        ],
+        "-25": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 138400,
+            "contributingLegCount": 2
+          }
+        ],
+        "-30": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 182500,
+            "contributingLegCount": 3
+          }
+        ],
+        "-35": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 212000,
+            "contributingLegCount": 4
+          }
+        ],
+        "-40": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-45": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-50": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-55": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-60": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-65": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-70": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-75": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ],
+        "-80": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 228500,
+            "contributingLegCount": 5
+          }
+        ]
+      }
+    },
+    "severe-depeg": {
+      "aave": {
+        "0": [],
+        "-5": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 273450,
+            "contributingLegCount": 6
+          }
+        ],
+        "-10": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 557100,
+            "contributingLegCount": 12
+          }
+        ],
+        "-15": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 603300,
+            "contributingLegCount": 13
+          }
+        ],
+        "-20": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 661950,
+            "contributingLegCount": 15
+          }
+        ],
+        "-25": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 684750,
+            "contributingLegCount": 17
+          }
+        ],
+        "-30": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 699750,
+            "contributingLegCount": 18
+          }
+        ],
+        "-35": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 718950,
+            "contributingLegCount": 20
+          }
+        ],
+        "-40": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 724050,
+            "contributingLegCount": 21
+          }
+        ],
+        "-45": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 736050,
+            "contributingLegCount": 22
+          }
+        ],
+        "-50": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-55": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-60": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-65": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-70": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-75": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ],
+        "-80": [
+          {
+            "market": "USDC",
+            "atRiskDebtUsd": 740550,
+            "contributingLegCount": 23
+          }
+        ]
+      },
+      "fluid": {
+        "0": [],
+        "-5": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 76950,
+            "contributingLegCount": 1
+          }
+        ],
+        "-10": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 72900,
+            "contributingLegCount": 1
+          }
+        ],
+        "-15": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 68850,
+            "contributingLegCount": 1
+          }
+        ],
+        "-20": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 142900,
+            "contributingLegCount": 2
+          }
+        ],
+        "-25": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 199150,
+            "contributingLegCount": 3
+          }
+        ],
+        "-30": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 239200,
+            "contributingLegCount": 4
+          }
+        ],
+        "-35": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 264650,
+            "contributingLegCount": 5
+          }
+        ],
+        "-40": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 277100,
+            "contributingLegCount": 6
+          }
+        ],
+        "-45": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 273050,
+            "contributingLegCount": 6
+          }
+        ],
+        "-50": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 269000,
+            "contributingLegCount": 6
+          }
+        ],
+        "-55": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 264950,
+            "contributingLegCount": 6
+          }
+        ],
+        "-60": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 260900,
+            "contributingLegCount": 6
+          }
+        ],
+        "-65": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 256850,
+            "contributingLegCount": 6
+          }
+        ],
+        "-70": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 252800,
+            "contributingLegCount": 6
+          }
+        ],
+        "-75": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 248750,
+            "contributingLegCount": 6
+          }
+        ],
+        "-80": [
+          {
+            "market": "unknown-vault",
+            "atRiskDebtUsd": 244700,
+            "contributingLegCount": 6
           }
         ]
       }

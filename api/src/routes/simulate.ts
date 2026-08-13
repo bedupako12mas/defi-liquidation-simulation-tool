@@ -2,24 +2,12 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { Kysely } from "kysely";
 import type { PublicClient } from "viem";
 import type { DB } from "../db/types.js";
-import { getShockPreset } from "../engine/shockModel.js";
+import { getShockPreset, sweepMagnitudes } from "../engine/shockModel.js";
 import { sweep } from "../engine/sweep.js";
 import { getCachedReserveConfigs } from "./reserveConfigCache.js";
 import { classifyForShock } from "./aaveShockClassification.js";
 import { classifyFluidAssets } from "./fluidShockClassification.js";
 import { loadLatestAaveSnapshot, loadLatestFluidSnapshot } from "./latestSnapshot.js";
-
-// Fixed, server-controlled sweep range - never derived from a request parameter. Matches
-// the mock fixtures' own range (web/scripts/generate-mock-fixtures.ts) so the UI's
-// existing behavior doesn't change. context.md §10 "denial of wallet": capping sweep
-// granularity server-side, regardless of what a caller might ask for, is the whole point -
-// there is currently no caller-supplied range at all, which is the strongest version of
-// that rule (nothing to cap because nothing is accepted).
-function sweepMagnitudes(): number[] {
-  const out: number[] = [];
-  for (let pct = 0; pct >= -80; pct -= 1) out.push(pct / 100);
-  return out;
-}
 
 function sendEvent(reply: FastifyReply, event: string, data: unknown) {
   reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);

@@ -8,7 +8,15 @@
  */
 
 import { useEffect, useState } from "react";
-import { fetchPositionSnapshot, type PositionSnapshot, type Protocol } from "@/lib/api/simulate";
+import {
+  fetchPositionSnapshot,
+  fetchKillPrices,
+  fetchMarketConcentration,
+  type PositionSnapshot,
+  type KillPriceResult,
+  type MarketConcentrationEntry,
+  type Protocol,
+} from "@/lib/api/simulate";
 import type { ShockPreset } from "@/lib/api/meta";
 
 const MAGNITUDE_MIN = 0;
@@ -25,6 +33,19 @@ const STATE_LABEL: Record<PositionSnapshot["state"], string> = {
 /** Identifies which (preset, magnitude, protocol) combination a fetched result belongs to. */
 function requestKey(presetId: ShockPreset["id"], magnitudePct: number, protocol: Protocol): string {
   return `${presetId}|${magnitudePct}|${protocol}`;
+}
+
+/** Identifies a (preset, protocol) result - kill-price is magnitude-independent (it scans
+ *  the whole range itself), so it's keyed without magnitudePct, unlike requestKey above. */
+function presetProtocolKey(presetId: ShockPreset["id"], protocol: Protocol): string {
+  return `${presetId}|${protocol}`;
+}
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? ((sorted[mid - 1]! + sorted[mid]!) / 2) : sorted[mid]!;
 }
 
 /**
@@ -83,6 +104,10 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
   const [error, setError] = useState<{ key: string; message: string } | null>(null);
   const currentKey = requestKey(presetId, magnitudePct, protocol);
 
+  const [killPriceResult, setKillPriceResult] = useState<{ key: string; rows: KillPriceResult[] } | null>(null);
+  const [marketResult, setMarketResult] = useState<{ key: string; rows: MarketConcentrationEntry[] } | null>(null);
+  const currentPresetProtocolKey = presetProtocolKey(presetId, protocol);
+
   useEffect(() => {
     let cancelled = false;
     const key = requestKey(presetId, magnitudePct, protocol);
@@ -98,8 +123,34 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
     };
   }, [presetId, magnitudePct, protocol]);
 
+  // Kill-price scans the whole magnitude range server-side - fetched once per
+  // (preset, protocol), not re-fetched on every slider move like the snapshot above.
+  useEffect(() => {
+    let cancelled = false;
+    const key = presetProtocolKey(presetId, protocol);
+    fetchKillPrices(presetId, protocol).then((rows) => {
+      if (!cancelled) setKillPriceResult({ key, rows });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [presetId, protocol]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const key = requestKey(presetId, magnitudePct, protocol);
+    fetchMarketConcentration(presetId, magnitudePct, protocol).then((rows) => {
+      if (!cancelled) setMarketResult({ key, rows });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [presetId, magnitudePct, protocol]);
+
   const snapshot = result && result.key === currentKey ? result.rows : null;
   const currentError = error && error.key === currentKey ? error.message : null;
+  const killPrices = killPriceResult && killPriceResult.key === currentPresetProtocolKey ? killPriceResult.rows : null;
+  const markets = marketResult && marketResult.key === currentKey ? marketResult.rows : null;
 
   const counts = snapshot?.reduce(
     (acc, row) => {
@@ -113,6 +164,36 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
   // comment) - summed for the single middle grid cell, labeled per the active protocol.
   const belowThresholdCount = counts ? counts.liquidatable + counts.eligible : 0;
   const belowThresholdLabel = protocol === "fluid" ? "Eligible (within sweep range)" : "Liquidatable (recoverable)";
+
+  // Metric 1: count-based %, not a raw total - comparable across Aave's small sample and
+  // Fluid's large one without either being dominated by absolute sample size. See
+  // docs/decisions.md's "5 rigorous comparison metrics" entry for why count-based (not
+  // dollar-based) is the more robust primary normalization.
+  const totalCount = snapshot?.length ?? 0;
+  const pct = (n: number) => (totalCount > 0 ? ((n / totalCount) * 100).toFixed(1) : "—");
+
+  // Metric 3: concentration - what share of at-risk collateral sits in the single
+  // largest at-risk position. High = lumpy/whale-dominated risk, low = broadly spread.
+  const atRiskRows = snapshot?.filter((r) => r.state === "liquidatable" || r.state === "eligible" || r.state === "toxic") ?? [];
+  const totalAtRiskUsd = atRiskRows.reduce((sum, r) => sum + r.collateralUsd, 0);
+  const largestAtRiskUsd = atRiskRows.reduce((max, r) => Math.max(max, r.collateralUsd), 0);
+  const concentrationPct = totalAtRiskUsd > 0 ? (largestAtRiskUsd / totalAtRiskUsd) * 100 : null;
+
+  // Metric 4: bad-debt severity among only the underwater subset - median debt/collateral
+  // ratio, not the summed dollar total, so one catastrophic position doesn't get
+  // conflated with many barely-underwater ones.
+  const underwaterRatios = (snapshot ?? [])
+    .filter((r) => r.badDebtUsd > 0 && r.collateralUsd > 0)
+    .map((r) => r.debtUsd / r.collateralUsd);
+  const severityMedian = median(underwaterRatios);
+
+  // Metric 2: headroom - median shock magnitude at which a position crosses its
+  // threshold, across positions that ever cross within the -80% range.
+  const crossingMagnitudes = (killPrices ?? [])
+    .map((r) => r.killMagnitudePct)
+    .filter((m): m is number => m !== null);
+  const headroomMedian = median(crossingMagnitudes);
+  const neverCrossesCount = killPrices ? killPrices.length - crossingMagnitudes.length : null;
 
   return (
     <div>
@@ -154,15 +235,21 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
         <>
           <div className="three-state-grid">
             <div className="three-state-cell">
-              <div className="count">{counts.healthy}</div>
+              <div className="count">
+                {counts.healthy} <span className="count-pct">({pct(counts.healthy)}%)</span>
+              </div>
               <div className="label">Healthy</div>
             </div>
             <div className="three-state-cell">
-              <div className="count">{belowThresholdCount}</div>
+              <div className="count">
+                {belowThresholdCount} <span className="count-pct">({pct(belowThresholdCount)}%)</span>
+              </div>
               <div className="label">{belowThresholdLabel}</div>
             </div>
             <div className="three-state-cell">
-              <div className="count">{counts.toxic}</div>
+              <div className="count">
+                {counts.toxic} <span className="count-pct">({pct(counts.toxic)}%)</span>
+              </div>
               <div className="label">Toxic (past UC frontier)</div>
             </div>
           </div>
@@ -174,8 +261,56 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
             <strong>UC Frontier</strong> (second tick) - a much higher bar past which any
             further liquidation under a fixed bonus mechanically worsens the position&apos;s
             LTV, not just an already-bad state. Toxic is always a subset of Liquidatable, not
-            a separate condition.
+            a separate condition. Percentages are of the sampled book (count-based, not
+            dollar-based) - the fair way to compare Aave&apos;s and Fluid&apos;s very
+            different sample sizes without either being distorted by a single large
+            position.
           </p>
+
+          <div className="three-state-grid" style={{ marginTop: "0.5rem" }}>
+            <div className="three-state-cell">
+              <div className="count">{concentrationPct === null ? "—" : `${concentrationPct.toFixed(1)}%`}</div>
+              <div className="label">Largest at-risk position&apos;s share of at-risk collateral</div>
+            </div>
+            <div className="three-state-cell">
+              <div className="count">{severityMedian === null ? "—" : `${(severityMedian * 100).toFixed(0)}%`}</div>
+              <div className="label">Median debt/collateral ratio, underwater positions only</div>
+            </div>
+            <div className="three-state-cell">
+              <div className="count">
+                {headroomMedian === null ? "—" : `${headroomMedian.toFixed(0)}%`}
+                {neverCrossesCount !== null && killPrices && (
+                  <span className="count-pct"> ({neverCrossesCount} of {killPrices.length} never cross)</span>
+                )}
+              </div>
+              <div className="label">Median shock magnitude at which a position first crosses its threshold</div>
+            </div>
+          </div>
+
+          {markets && markets.length > 0 && (
+            <div style={{ marginTop: "1rem" }}>
+              <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
+                At-risk debt by {protocol === "aave" ? "reserve" : "vault"} (top 5) - each
+                protocol&apos;s own isolated-market unit, not a forced-common grouping.
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>{protocol === "aave" ? "Reserve" : "Vault"}</th>
+                    <th>At-risk debt (USD)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {markets.slice(0, 5).map((m) => (
+                    <tr key={m.market}>
+                      <td>{protocol === "fluid" ? `${m.market.slice(0, 10)}...` : m.market}</td>
+                      <td className="num">${Math.round(m.atRiskDebtUsd).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <div style={{ overflowX: "auto" }}>
             <table>

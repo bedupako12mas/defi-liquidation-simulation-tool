@@ -6,6 +6,7 @@ import { db } from "./db/client.js";
 import { registerMetaRoute } from "./routes/meta.js";
 import { registerSimulateRoute } from "./routes/simulate.js";
 import { registerPositionsRoute } from "./routes/positions.js";
+import { registerAnalyticsRoutes } from "./routes/analytics.js";
 
 const app = Fastify({ logger: true });
 
@@ -47,6 +48,7 @@ app.setErrorHandler((error: FastifyError, request, reply) => {
 registerMetaRoute(app, { db, client: publicClient });
 registerSimulateRoute(app, { db, client: publicClient, allowedOrigins });
 registerPositionsRoute(app, { db, client: publicClient });
+registerAnalyticsRoutes(app, { db, client: publicClient });
 
 app.get("/health", async () => ({ ok: true }));
 

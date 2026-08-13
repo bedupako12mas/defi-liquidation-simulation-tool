@@ -91,3 +91,15 @@ export function getShockPreset(presetId: string | undefined): ShockPreset | unde
   if (!Object.prototype.hasOwnProperty.call(SHOCK_PRESETS, presetId)) return undefined;
   return SHOCK_PRESETS[presetId as keyof typeof SHOCK_PRESETS];
 }
+
+/**
+ * Fixed, server-controlled sweep range - never derived from a request parameter. Shared
+ * across every route that sweeps a full magnitude range (simulate.ts, killPrice.ts's
+ * consumers) so there's one definition, not independent copies that could drift.
+ * context.md §10 "denial of wallet": capping sweep granularity server-side is the point.
+ */
+export function sweepMagnitudes(): number[] {
+  const out: number[] = [];
+  for (let pct = 0; pct >= -80; pct -= 1) out.push(pct / 100);
+  return out;
+}

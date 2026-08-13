@@ -8,12 +8,17 @@
 
 import fixtures from "./fixtures.generated.json";
 import type { MetaResponse, ShockPreset } from "../meta";
-import type { Protocol, PositionSnapshot, SweepPoint } from "../simulate";
+import type { Protocol, PositionSnapshot, SweepPoint, KillPriceResult, MarketConcentrationEntry } from "../simulate";
 
 type FixturesShape = {
   meta: MetaResponse;
   sweeps: Record<string, { aave: SweepPoint[]; fluid: SweepPoint[] }>;
   positionSnapshots: Record<string, { aave: Record<string, PositionSnapshot[]>; fluid: Record<string, PositionSnapshot[]> }>;
+  killPrices: Record<string, { aave: KillPriceResult[]; fluid: KillPriceResult[] }>;
+  marketConcentration: Record<
+    string,
+    { aave: Record<string, MarketConcentrationEntry[]>; fluid: Record<string, MarketConcentrationEntry[]> }
+  >;
 };
 
 const data = fixtures as unknown as FixturesShape;
@@ -52,6 +57,25 @@ export async function getMockPositionSnapshot(
   protocol: Protocol
 ): Promise<PositionSnapshot[]> {
   const forPreset = data.positionSnapshots[presetId];
+  if (!forPreset) return [];
+  const byMagnitude = forPreset[protocol];
+  const keys = Object.keys(byMagnitude);
+  const key = nearestMagnitudeKey(keys, magnitudePct);
+  return byMagnitude[key] ?? [];
+}
+
+export async function getMockKillPrices(presetId: string, protocol: Protocol): Promise<KillPriceResult[]> {
+  const forPreset = data.killPrices[presetId];
+  if (!forPreset) return [];
+  return forPreset[protocol];
+}
+
+export async function getMockMarketConcentration(
+  presetId: string,
+  magnitudePct: number,
+  protocol: Protocol
+): Promise<MarketConcentrationEntry[]> {
+  const forPreset = data.marketConcentration[presetId];
   if (!forPreset) return [];
   const byMagnitude = forPreset[protocol];
   const keys = Object.keys(byMagnitude);

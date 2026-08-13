@@ -202,6 +202,7 @@ ul.limitations li { margin-bottom: 0.5rem; }
   padding: 0.85rem 1rem;
 }
 .three-state-cell .count { font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.count-pct { font-size: 0.85rem; font-weight: 400; color: var(--text-muted); }
 .three-state-cell .label { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem; }
 @media (max-width: 640px) {
   .three-state-grid { grid-template-columns: 1fr; }

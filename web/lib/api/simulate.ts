@@ -202,3 +202,44 @@ export async function fetchPositionSnapshot(
   if (!res.ok) throw new Error(`GET /api/positions failed: ${res.status}`);
   return res.json();
 }
+
+/** At what shock magnitude does each position first cross its own threshold - null if it
+ *  never crosses within the -80% range. See api/src/engine/killPrice.ts. */
+export interface KillPriceResult {
+  id: string;
+  killMagnitudePct: number | null;
+}
+
+export async function fetchKillPrices(presetId: ShockPreset["id"], protocol: Protocol): Promise<KillPriceResult[]> {
+  if (USE_MOCK) {
+    const { getMockKillPrices } = await import("./mock/mockClient");
+    return getMockKillPrices(presetId, protocol);
+  }
+  const params = new URLSearchParams({ presetId, protocol });
+  const res = await fetch(`${API_BASE}/api/kill-price?${params.toString()}`);
+  if (!res.ok) throw new Error(`GET /api/kill-price failed: ${res.status}`);
+  return res.json();
+}
+
+/** At-risk debt grouped by each protocol's own isolated-market unit - reserve (asset) for
+ *  Aave, vault for Fluid. See api/src/engine/marketConcentration.ts. */
+export interface MarketConcentrationEntry {
+  market: string;
+  atRiskDebtUsd: number;
+  contributingLegCount: number;
+}
+
+export async function fetchMarketConcentration(
+  presetId: ShockPreset["id"],
+  magnitudePct: number,
+  protocol: Protocol
+): Promise<MarketConcentrationEntry[]> {
+  if (USE_MOCK) {
+    const { getMockMarketConcentration } = await import("./mock/mockClient");
+    return getMockMarketConcentration(presetId, magnitudePct, protocol);
+  }
+  const params = new URLSearchParams({ presetId, magnitudePct: String(magnitudePct), protocol });
+  const res = await fetch(`${API_BASE}/api/market-concentration?${params.toString()}`);
+  if (!res.ok) throw new Error(`GET /api/market-concentration failed: ${res.status}`);
+  return res.json();
+}

@@ -29,6 +29,12 @@ import path from "node:path";
 
 import { sweep, type SweepPoint } from "../../api/src/engine/sweep.js";
 import { SHOCK_PRESETS, applyShock, type AssetShockConfig } from "../../api/src/engine/shockModel.js";
+import { computeKillMagnitudes, type KillPriceResult } from "../../api/src/engine/killPrice.js";
+import {
+  aaveMarketConcentration,
+  fluidMarketConcentration,
+  type MarketConcentrationEntry,
+} from "../../api/src/engine/marketConcentration.js";
 import {
   healthFactor,
   totalCollateralValueUsd8,
@@ -328,12 +334,52 @@ function buildPositionSnapshots() {
   return out;
 }
 
+function buildKillPrices() {
+  const magnitudes = sweepMagnitudes(1);
+  const out: Record<string, { aave: KillPriceResult[]; fluid: KillPriceResult[] }> = {};
+  for (const preset of Object.values(SHOCK_PRESETS) as ShockPreset[]) {
+    out[preset.id] = {
+      aave: computeKillMagnitudes(AAVE_POSITIONS, BASE_PRICES, ASSET_SHOCK_CONFIG, preset, magnitudes),
+      fluid: computeKillMagnitudes(FLUID_POSITIONS, BASE_PRICES, ASSET_SHOCK_CONFIG, preset, magnitudes),
+    };
+  }
+  return out;
+}
+
+function buildMarketConcentration() {
+  const magnitudes = sweepMagnitudes(5);
+  const out: Record<
+    string,
+    { aave: Record<string, MarketConcentrationEntry[]>; fluid: Record<string, MarketConcentrationEntry[]> }
+  > = {};
+
+  for (const preset of Object.values(SHOCK_PRESETS) as ShockPreset[]) {
+    const aaveByMagnitude: Record<string, MarketConcentrationEntry[]> = {};
+    const fluidByMagnitude: Record<string, MarketConcentrationEntry[]> = {};
+
+    for (const magnitude of magnitudes) {
+      const prices = applyShock(BASE_PRICES, ASSET_SHOCK_CONFIG, magnitude, preset);
+      const key = String(Math.round(magnitude * 1000) / 10);
+      // Fixture asset ids are already plain symbols ("WETH", "USDC", etc.) - no address
+      // lookup needed here, unlike the real API which maps real addresses to symbols.
+      aaveByMagnitude[key] = aaveMarketConcentration(AAVE_POSITIONS, prices);
+      fluidByMagnitude[key] = fluidMarketConcentration(FLUID_POSITIONS, prices);
+    }
+
+    out[preset.id] = { aave: aaveByMagnitude, fluid: fluidByMagnitude };
+  }
+
+  return out;
+}
+
 const fixtures = {
   generatedAt: new Date().toISOString(),
   generatedBy: "web/scripts/generate-mock-fixtures.ts (real api/src/engine output, frozen)",
   meta: buildMeta(),
   sweeps: buildSweeps(),
   positionSnapshots: buildPositionSnapshots(),
+  killPrices: buildKillPrices(),
+  marketConcentration: buildMarketConcentration(),
 };
 
 const outPath = path.join(__dirname, "..", "lib", "api", "mock", "fixtures.generated.json");
