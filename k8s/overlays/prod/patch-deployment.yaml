@@ -1,14 +1,17 @@
 # Strategic merge patch over k8s/base/deployment.yaml - prod values only.
-# 2 replicas as a floor for availability during a rolling update (one pod always serving
-# while the other cycles) - not a measured capacity number, since there's no real traffic
-# yet. Revisit alongside the resource requests/limits below once this has actually been
-# load-tested (same caveat as k8s/base/deployment.yaml).
+# 1 replica, not 2: the real cluster this deploys to is a single-node, cost-constrained
+# node pool (staging + this prod deployment already sit at ~88% of the node's allocatable
+# CPU with 1 replica each) - a genuine 2-replica availability floor would need a bigger/
+# second node, a real cost this project has deliberately avoided throughout (see
+# docs/decisions.md). Honest adjustment to actual capacity, not a downgrade in intent -
+# revisit once this runs on real, sized infrastructure with real traffic to load-test
+# against.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api
 spec:
-  replicas: 2
+  replicas: 1
   template:
     spec:
       containers:
@@ -18,6 +21,10 @@ spec:
               value: "4000"
             - name: NODE_ENV
               value: production
+            - name: ALLOWED_ORIGINS
+              # Same Vercel frontend as staging - there's only one deployed frontend right
+              # now (see docs/decisions.md's Cloudflare/tech-stack entry).
+              value: "https://defi-liquidation-simulation-tool-amber.vercel.app"
           resources:
             requests:
               cpu: "150m"
