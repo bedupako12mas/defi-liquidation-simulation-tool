@@ -39,6 +39,13 @@ export interface PositionsTable {
   /** JSON-serialized engine/types.ts DebtLeg[] (asset, amount, decimals), bigints as strings. */
   debt: ColumnType<unknown, unknown, unknown>;
   liquidation_incentive_bps: Numeric;
+  /** Fluid-only identity - (snapshot_id, fluid_vault_address, fluid_nft_id) is Fluid's
+   *  natural key (one wallet can own multiple Fluid positions). Null for Aave rows -
+   *  enforced by a CHECK constraint (migration 0002), both null or both set together.
+   *  Insert type includes `undefined` deliberately - syncAaveSnapshot.ts's existing
+   *  insert omits these columns entirely and relies on the column's NULL default. */
+  fluid_vault_address: ColumnType<string | null, string | null | undefined, string | null>;
+  fluid_nft_id: ColumnType<string | null, string | bigint | null | undefined, string | bigint | null>;
 }
 
 export interface ProtocolParamsTable {

@@ -65,6 +65,59 @@ export async function loadLatestAaveSnapshot(db: Kysely<DB>): Promise<LoadedSnap
   return { snapshotId: snapshot.id, pinnedBlock: snapshot.pinned_block, positions, basePrices };
 }
 
+/**
+ * Same shape as loadLatestAaveSnapshot, filtered to protocol='fluid'. The id format
+ * (`fluid-<vault>-<nftId>`) is regenerated here from the stored fluid_vault_address/
+ * fluid_nft_id columns (migration 0002) - must match fluidPositions.ts's write-time
+ * format exactly, same round-trip discipline as Aave's id regeneration above.
+ */
+export async function loadLatestFluidSnapshot(db: Kysely<DB>): Promise<LoadedSnapshot | null> {
+  const snapshot = await db
+    .selectFrom("snapshots")
+    .selectAll()
+    .where("protocol", "=", "fluid")
+    .orderBy("id", "desc")
+    .limit(1)
+    .executeTakeFirst();
+
+  if (!snapshot) return null;
+
+  const [positionRows, paramRows] = await Promise.all([
+    db.selectFrom("positions").selectAll().where("snapshot_id", "=", snapshot.id).execute(),
+    db.selectFrom("protocol_params").selectAll().where("snapshot_id", "=", snapshot.id).execute(),
+  ]);
+
+  const positions: Position[] = [];
+  let skippedPositions = 0;
+
+  for (const row of positionRows) {
+    try {
+      if (row.fluid_vault_address === null || row.fluid_nft_id === null) {
+        throw new Error("fluid_vault_address/fluid_nft_id missing on a fluid-protocol row");
+      }
+      positions.push({
+        id: `fluid-${row.fluid_vault_address.toLowerCase()}-${row.fluid_nft_id}`,
+        protocol: "fluid",
+        user: row.user_address,
+        collateral: parseBigintLegs<CollateralLeg>(row.collateral),
+        debt: parseBigintLegs<DebtLeg>(row.debt),
+        liquidationIncentiveBps: BigInt(row.liquidation_incentive_bps),
+      });
+    } catch (err) {
+      skippedPositions++;
+      console.warn(`[latestSnapshot] skipped malformed fluid position row (id=${row.id}):`, err);
+    }
+  }
+
+  if (skippedPositions > 0) {
+    console.warn(`[latestSnapshot] ${skippedPositions} of ${positionRows.length} fluid position rows skipped`);
+  }
+
+  const basePrices: PriceVector = Object.fromEntries(paramRows.map((p) => [p.asset, BigInt(p.price_usd8)]));
+
+  return { snapshotId: snapshot.id, pinnedBlock: snapshot.pinned_block, positions, basePrices };
+}
+
 /** Reverses syncAaveSnapshot.ts's JSON.stringify(legs, bigIntReplacer) - amount and, for
  *  collateral, liquidationThresholdBps come back as strings and are parsed to bigint here.
  *  Skips (and logs) an individual malformed leg rather than failing the whole array - the

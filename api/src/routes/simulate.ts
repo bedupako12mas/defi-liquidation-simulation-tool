@@ -6,7 +6,8 @@ import { getShockPreset } from "../engine/shockModel.js";
 import { sweep } from "../engine/sweep.js";
 import { getCachedReserveConfigs } from "./reserveConfigCache.js";
 import { classifyForShock } from "./aaveShockClassification.js";
-import { loadLatestAaveSnapshot } from "./latestSnapshot.js";
+import { classifyFluidAssets } from "./fluidShockClassification.js";
+import { loadLatestAaveSnapshot, loadLatestFluidSnapshot } from "./latestSnapshot.js";
 
 // Fixed, server-controlled sweep range - never derived from a request parameter. Matches
 // the mock fixtures' own range (web/scripts/generate-mock-fixtures.ts) so the UI's
@@ -101,6 +102,13 @@ export function registerSimulateRoute(
         const reserveConfigs = await getCachedReserveConfigs(deps.client);
         const assetConfig = Object.fromEntries(reserveConfigs.map((r) => [r.asset, classifyForShock(r)]));
 
+        // Fluid snapshot is optional at the route level - same "no snapshot yet" tolerance
+        // as Aave's own null-check above, just non-fatal here since Aave's stream already
+        // has real data to show. classifyFluidAssets reuses reserveConfigs (already fetched
+        // above for Aave) - no extra RPC call for Fluid's own classification.
+        const fluidSnapshot = await loadLatestFluidSnapshot(deps.db);
+        const fluidAssetConfig = fluidSnapshot ? classifyFluidAssets(fluidSnapshot.positions, reserveConfigs) : null;
+
         for (const magnitude of sweepMagnitudes()) {
           if (clientDisconnected) break;
 
@@ -115,7 +123,21 @@ export function registerSimulateRoute(
           if (point) {
             sendEvent(reply, "point", { protocol: "aave", point });
           }
-          // No fluid point emitted - Fluid data doesn't exist yet. Omitted, not faked.
+
+          if (fluidSnapshot && fluidAssetConfig) {
+            const [fluidPoint] = sweep({
+              positions: fluidSnapshot.positions,
+              basePrices: fluidSnapshot.basePrices,
+              assetConfig: fluidAssetConfig,
+              preset,
+              magnitudes: [magnitude],
+            });
+            if (fluidPoint) {
+              sendEvent(reply, "point", { protocol: "fluid", point: fluidPoint });
+            }
+          }
+          // If fluidSnapshot is null, no fluid point is emitted this round - omitted, not
+          // faked, same discipline as the comment this replaced.
 
           await yieldToEventLoop();
         }

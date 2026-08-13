@@ -14,8 +14,21 @@ const LIMITATIONS = [
     "(more conservative) health factor here than its real on-chain value, because the " +
     "eMode-boosted liquidation threshold isn't applied. Confirmed against 2 real positions " +
     "during validation - see docs/decisions.md's validation-milestone entry.",
-  "Fluid T1 vault data is not yet live - only Aave V3 positions are real. Fluid points are " +
-    "simply absent from the simulation stream, not fabricated.",
+  "Fluid T1 vault data is now live: all 101 real T1 vaults, real positions with real debt " +
+    "(supply-only positions excluded - not liquidation-relevant). Prices are resolved via " +
+    "Fluid's own oracle graph first (chained through Fluid's own vault pairs to a " +
+    "stablecoin anchor), falling back to Aave's already-loaded price for the same real " +
+    "asset only when Fluid's own graph can't reach one - in practice, zero tokens needed " +
+    "that fallback. A position whose price can't be resolved by either source is excluded " +
+    "entirely, not partially included.",
+  "Fluid's per-position state uses \"eligible\", not \"liquidatable\" - deliberately " +
+    "different words for a real mechanistic difference. Aave's liquidatable state (HF<1) " +
+    "is individually actionable: a liquidator can target that exact position directly, " +
+    "right now. Fluid's liquidate() has no per-position targeting at all - it sweeps " +
+    "aggregate ticks from worst to a threshold, consuming whatever positions sit in that " +
+    "range. \"Eligible\" means a position's ratio has entered the zone a sweep could " +
+    "reach - not a guarantee it will be, which depends on aggregate sweep depth and what " +
+    "else is queued ahead of it in the same vault.",
   "protocol_params does not carry per-asset liquidation incentive/bonus - the methodology " +
     "table's incentive figures are derived live from Aave's PoolDataProvider, not the DB.",
   "The Aave indexer's initial backfill is bounded (~50,000 blocks), not a full historical " +
@@ -44,13 +57,22 @@ const LIMITATIONS = [
 
 export function registerMetaRoute(app: FastifyInstance, deps: { db: Kysely<DB>; client: PublicClient }) {
   app.get("/api/meta", async () => {
-    const latestSnapshot = await deps.db
-      .selectFrom("snapshots")
-      .select(["pinned_block"])
-      .where("protocol", "=", "aave")
-      .orderBy("id", "desc")
-      .limit(1)
-      .executeTakeFirst();
+    const [latestSnapshot, latestFluidSnapshot] = await Promise.all([
+      deps.db
+        .selectFrom("snapshots")
+        .select(["pinned_block"])
+        .where("protocol", "=", "aave")
+        .orderBy("id", "desc")
+        .limit(1)
+        .executeTakeFirst(),
+      deps.db
+        .selectFrom("snapshots")
+        .select(["pinned_block"])
+        .where("protocol", "=", "fluid")
+        .orderBy("id", "desc")
+        .limit(1)
+        .executeTakeFirst(),
+    ]);
 
     const reserveConfigs = await getCachedReserveConfigs(deps.client);
 
@@ -72,6 +94,7 @@ export function registerMetaRoute(app: FastifyInstance, deps: { db: Kysely<DB>; 
     return {
       mode: "demo",
       pinnedBlock: latestSnapshot?.pinned_block ?? null,
+      fluidPinnedBlock: latestFluidSnapshot?.pinned_block ?? null,
       presets: Object.values(SHOCK_PRESETS),
       ucFrontier,
       limitations: LIMITATIONS,

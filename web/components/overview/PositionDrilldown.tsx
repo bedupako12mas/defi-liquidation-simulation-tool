@@ -18,6 +18,7 @@ const MAGNITUDE_STEP = 5;
 const STATE_LABEL: Record<PositionSnapshot["state"], string> = {
   healthy: "Healthy",
   liquidatable: "Liquidatable",
+  eligible: "Eligible",
   toxic: "Toxic",
 };
 
@@ -105,8 +106,13 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
       acc[row.state] += 1;
       return acc;
     },
-    { healthy: 0, liquidatable: 0, toxic: 0 }
+    { healthy: 0, liquidatable: 0, eligible: 0, toxic: 0 }
   );
+  // Only one of liquidatable/eligible is ever nonzero for a given protocol's rows (Aave
+  // uses "liquidatable", Fluid uses "eligible" - see lib/api/simulate.ts's PositionState
+  // comment) - summed for the single middle grid cell, labeled per the active protocol.
+  const belowThresholdCount = counts ? counts.liquidatable + counts.eligible : 0;
+  const belowThresholdLabel = protocol === "fluid" ? "Eligible (within sweep range)" : "Liquidatable (recoverable)";
 
   return (
     <div>
@@ -152,8 +158,8 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
               <div className="label">Healthy</div>
             </div>
             <div className="three-state-cell">
-              <div className="count">{counts.liquidatable}</div>
-              <div className="label">Liquidatable (recoverable)</div>
+              <div className="count">{belowThresholdCount}</div>
+              <div className="label">{belowThresholdLabel}</div>
             </div>
             <div className="three-state-cell">
               <div className="count">{counts.toxic}</div>

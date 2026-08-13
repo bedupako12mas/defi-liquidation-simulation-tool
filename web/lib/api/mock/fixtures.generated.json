@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-13T01:36:51.222Z",
+  "generatedAt": "2026-08-13T06:33:59.314Z",
   "generatedBy": "web/scripts/generate-mock-fixtures.ts (real api/src/engine output, frozen)",
   "meta": {
     "mode": "demo",
@@ -9448,7 +9448,7 @@
             "ltvPct": 88.75,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           }
         ],
@@ -9678,7 +9678,7 @@
             "ltvPct": 89.33,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -9690,7 +9690,7 @@
             "ltvPct": 94.67,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           }
         ],
@@ -9908,7 +9908,7 @@
             "ltvPct": 90,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -9920,7 +9920,7 @@
             "ltvPct": 95.71,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -10138,7 +10138,7 @@
             "ltvPct": 90.77,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -10150,7 +10150,7 @@
             "ltvPct": 96.92,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -10368,7 +10368,7 @@
             "ltvPct": 91.67,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -10380,7 +10380,7 @@
             "ltvPct": 98.33,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -18294,7 +18294,7 @@
             "ltvPct": 88.75,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           }
         ],
@@ -18524,7 +18524,7 @@
             "ltvPct": 89.33,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -18536,7 +18536,7 @@
             "ltvPct": 94.67,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           }
         ],
@@ -18754,7 +18754,7 @@
             "ltvPct": 90,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -18766,7 +18766,7 @@
             "ltvPct": 95.71,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -18984,7 +18984,7 @@
             "ltvPct": 90.77,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -18996,7 +18996,7 @@
             "ltvPct": 96.92,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -19214,7 +19214,7 @@
             "ltvPct": 91.67,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -19226,7 +19226,7 @@
             "ltvPct": 98.33,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -26354,7 +26354,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -26596,7 +26596,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -26838,7 +26838,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -27080,7 +27080,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -27140,7 +27140,7 @@
             "ltvPct": 88.75,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           }
         ],
@@ -27322,7 +27322,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -27370,7 +27370,7 @@
             "ltvPct": 89.33,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -27382,7 +27382,7 @@
             "ltvPct": 94.67,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           }
         ],
@@ -27564,7 +27564,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -27600,7 +27600,7 @@
             "ltvPct": 90,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -27612,7 +27612,7 @@
             "ltvPct": 95.71,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -27806,7 +27806,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -27830,7 +27830,7 @@
             "ltvPct": 90.77,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -27842,7 +27842,7 @@
             "ltvPct": 96.92,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -28048,7 +28048,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -28060,7 +28060,7 @@
             "ltvPct": 91.67,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -28072,7 +28072,7 @@
             "ltvPct": 98.33,
             "effectiveThresholdPct": 85,
             "ucFrontierPct": 99.01,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -28290,7 +28290,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -28532,7 +28532,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -28774,7 +28774,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -29016,7 +29016,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -29258,7 +29258,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -29500,7 +29500,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -29742,7 +29742,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {
@@ -29984,7 +29984,7 @@
             "ltvPct": 96.77,
             "effectiveThresholdPct": 95,
             "ucFrontierPct": 99.9,
-            "state": "liquidatable",
+            "state": "eligible",
             "badDebtUsd": 0
           },
           {

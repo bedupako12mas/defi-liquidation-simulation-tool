@@ -37,7 +37,11 @@ export interface SweepPoint {
   badDebtUsd: number;
 }
 
-export type PositionState = "healthy" | "liquidatable" | "toxic";
+// "eligible" is Fluid's distinct word for the HF<1 boundary - not the same guarantee as
+// Aave's "liquidatable" (a real liquidator can target an Aave position directly; Fluid's
+// equivalent only means the position's ratio has entered a zone a tick-sweep could reach).
+// See api/src/routes/positions.ts's toPositionSnapshot for the full reasoning.
+export type PositionState = "healthy" | "liquidatable" | "eligible" | "toxic";
 
 export interface PositionSnapshot {
   id: string;

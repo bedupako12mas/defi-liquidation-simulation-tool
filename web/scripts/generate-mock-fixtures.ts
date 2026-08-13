@@ -215,9 +215,11 @@ function sweepMagnitudes(stepPct: number): number[] {
   return out;
 }
 
-function positionState(position: Position, prices: PriceVector): "healthy" | "liquidatable" | "toxic" {
+// "eligible" for Fluid, "liquidatable" for Aave - mirrors api/src/routes/positions.ts's
+// toPositionSnapshot exactly, so mock mode stays representative of real API behavior.
+function positionState(position: Position, prices: PriceVector): "healthy" | "liquidatable" | "eligible" | "toxic" {
   if (isToxicLiquidation(position, prices)) return "toxic";
-  if (isLiquidatable(position, prices)) return "liquidatable";
+  if (isLiquidatable(position, prices)) return position.protocol === "fluid" ? "eligible" : "liquidatable";
   return "healthy";
 }
 
