@@ -16,9 +16,19 @@ metadata:
     app.kubernetes.io/name: api
     app.kubernetes.io/part-of: liquidation-simulator
 spec:
-  # Overridden per-environment (staging: 1, prod: 2+) via overlay patches - see
-  # k8s/overlays/*/patch-deployment.yaml.
+  # Overridden per-environment via overlay patches - see k8s/overlays/*/patch-deployment.yaml.
+  # Both currently run 1 replica - the real single-node cluster doesn't have capacity for
+  # more (see docs/decisions.md's prod-replica-count entry).
   replicas: 1
+  # Recreate, not the k8s default RollingUpdate: a rolling update needs to briefly run old
+  # and new pods together (even at 1 replica, maxSurge rounds up to at least 1 extra pod),
+  # which this node doesn't have room for once Vault is also running - a real rollout got
+  # stuck Pending indefinitely because of exactly this (see docs/decisions.md). Recreate
+  # trades a brief real downtime during every deploy for not needing surge capacity this
+  # cluster doesn't have - the honest tradeoff for this node's actual size, not a
+  # workaround to revisit only once real traffic/a bigger node justifies RollingUpdate.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: api
