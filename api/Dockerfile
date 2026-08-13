@@ -60,12 +60,22 @@ COPY --from=builder --chown=node:node /app/dist ./dist
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/package.json ./package.json
 
+# The runtime CMD is `node dist/server.js` directly - npm is never invoked in this
+# container. node:22-slim ships npm's own CLI anyway, with its own vendored
+# node_modules (brace-expansion, tar, ip-address, sigstore, picomatch, etc.) - every
+# HIGH/CRITICAL finding Trivy caught on this image (CVE-2026-59873/59874 in tar,
+# CVE-2026-13149/14257/69152 in brace-expansion, and others) was inside that unused
+# bundle, not our application code or its real dependencies. Removing it as root before
+# switching to the non-root user below shrinks real attack surface (OWASP A03) instead of
+# just suppressing the scan.
+USER root
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+USER node
+
 # PORT is configurable (matches app/api/src/server.ts's `process.env.PORT ?? 4000` pattern);
 # 4000 is the default so local `docker run` without extra flags still works.
 ENV PORT=4000
 EXPOSE 4000
-
-USER node
 
 # CIS Docker Benchmark 4.6 / OWASP A09 (Security Logging and Alerting Failures): a
 # HEALTHCHECK gives the orchestrator (and a human running `docker ps`) a signal independent
