@@ -8,19 +8,18 @@ import { StreamedChart, type MetricKey } from "@/components/overview/StreamedCha
 import { PositionDrilldown } from "@/components/overview/PositionDrilldown";
 import type { ShockPreset } from "@/lib/api/meta";
 
-// Normalized metrics first, deliberately - they're the fair comparison across Aave's and
-// Fluid's very differently-sized real samples (see docs/decisions.md's "5 rigorous
-// comparison metrics" entry). Raw totals are still available (real numbers, not wrong),
-// just no longer the default first thing shown.
+// Normalized only - raw totals (liquidatableCollateralUsd, toxicPositionCount, badDebtUsd)
+// are dropped from the selector entirely, not just deprioritized. They're still real,
+// correct numbers (still in SweepPoint, still used elsewhere - e.g. formatValue/
+// PCT_METRICS in StreamedChart.tsx), but as a *graph comparing two very differently-sized
+// real samples* they were actively misleading (see docs/decisions.md's "5 rigorous
+// comparison metrics" entry - this is what prompted the whole normalization work).
 const METRICS: { key: MetricKey; label: string }[] = [
   { key: "liquidatablePositionPct", label: "Liquidatable/eligible (%)" },
   { key: "toxicPositionPct", label: "Toxic (%)" },
   { key: "liquidatableCollateralPct", label: "Liquidatable collateral (%)" },
   { key: "concentrationPct", label: "Concentration" },
   { key: "badDebtSeverityMedian", label: "Bad debt severity" },
-  { key: "liquidatableCollateralUsd", label: "Liquidatable collateral (raw $)" },
-  { key: "toxicPositionCount", label: "Toxic positions (raw count)" },
-  { key: "badDebtUsd", label: "Bad debt (raw $)" },
 ];
 
 export function OverviewTab() {
