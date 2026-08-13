@@ -57,6 +57,15 @@ export function registerPositionsRoute(app: FastifyInstance, deps: { db: Kysely<
       const toxic = isToxicLiquidation(position, prices);
       const liquidatable = hf !== null && hf < 10n ** 18n;
 
+      // HF = (Σcollateral*price*threshold) / debtValue, LTV = debtValue / (Σcollateral*price)
+      // (unweighted) -> HF * LTV = (Σcollateral*price*threshold) / (Σcollateral*price), the
+      // collateral-value-weighted average threshold across every leg. Recovers a single,
+      // honest "effective threshold" percentage from numbers already computed above - valid
+      // for a single-leg Fluid position and a multi-leg Aave position alike, no new engine
+      // math needed. Added so the frontend can show Threshold/LTV/UC-frontier together and
+      // make "liquidatable vs toxic" visually obvious instead of three disconnected numbers.
+      const effectiveThresholdPct = hf === null || ltv === null ? null : (Number(hf) / 1e18) * (Number(ltv) / 1e18) * 100;
+
       return {
         id: position.id,
         protocol: "aave",
@@ -64,6 +73,7 @@ export function registerPositionsRoute(app: FastifyInstance, deps: { db: Kysely<
         debtUsd: Number(totalDebtValueUsd8(position, prices)) / USD8,
         healthFactor: hf === null ? null : Number(hf) / 1e18,
         ltvPct: ltv === null ? null : (Number(ltv) / 1e18) * 100,
+        effectiveThresholdPct,
         ucFrontierPct: (Number(frontierWad) / 1e18) * 100,
         state: toxic ? "toxic" : liquidatable ? "liquidatable" : "healthy",
         badDebtUsd: Number(badDebtUsd8(position, prices)) / USD8,

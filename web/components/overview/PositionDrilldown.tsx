@@ -26,6 +26,51 @@ function requestKey(presetId: ShockPreset["id"], magnitudePct: number, protocol:
   return `${presetId}|${magnitudePct}|${protocol}`;
 }
 
+/**
+ * Visualizes where a position's LTV sits relative to its two real thresholds: the
+ * liquidation Threshold (crossing it -> "Liquidatable") and the UC Frontier (crossing it
+ * -> "Toxic", a much higher bar - see docs/decisions.md / api's toxicLiquidation.ts). Built
+ * to make the distinction between these two states visible at a glance, not just as two
+ * disconnected numbers in adjacent columns.
+ */
+function LtvLadder({
+  ltvPct,
+  thresholdPct,
+  ucFrontierPct,
+  state,
+}: {
+  ltvPct: number | null;
+  thresholdPct: number | null;
+  ucFrontierPct: number;
+  state: PositionSnapshot["state"];
+}) {
+  if (ltvPct === null || thresholdPct === null) {
+    return <span className="ltv-ladder-na">—</span>;
+  }
+  const clamp = (v: number) => Math.max(0, Math.min(100, v));
+  const ltvPos = clamp(ltvPct);
+  const thresholdPos = clamp(thresholdPct);
+  const ucPos = clamp(ucFrontierPct);
+
+  return (
+    <div
+      className="ltv-ladder"
+      title={`LTV ${ltvPct.toFixed(1)}% / threshold ${thresholdPct.toFixed(1)}% / UC frontier ${ucFrontierPct.toFixed(1)}%`}
+    >
+      <div className="ltv-ladder-track">
+        <div
+          className="ltv-ladder-zone ltv-ladder-zone-liquidatable"
+          style={{ left: `${thresholdPos}%`, width: `${Math.max(0, ucPos - thresholdPos)}%` }}
+        />
+        <div className="ltv-ladder-zone ltv-ladder-zone-toxic" style={{ left: `${ucPos}%`, width: `${Math.max(0, 100 - ucPos)}%` }} />
+        <div className="ltv-ladder-tick" style={{ left: `${thresholdPos}%` }} />
+        <div className="ltv-ladder-tick" style={{ left: `${ucPos}%` }} />
+        <div className="ltv-ladder-marker" data-state={state} style={{ left: `${ltvPos}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] }) {
   const [protocol, setProtocol] = useState<Protocol>("aave");
   const [magnitudePct, setMagnitudePct] = useState(-30);
@@ -116,6 +161,16 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
             </div>
           </div>
 
+          <p className="explainer">
+            A position becomes <strong>Liquidatable</strong> once its LTV crosses the
+            liquidation <strong>Threshold</strong> (first tick below) - the protocol&apos;s
+            own eligibility bar. It only becomes <strong>Toxic</strong> past the{" "}
+            <strong>UC Frontier</strong> (second tick) - a much higher bar past which any
+            further liquidation under a fixed bonus mechanically worsens the position&apos;s
+            LTV, not just an already-bad state. Toxic is always a subset of Liquidatable, not
+            a separate condition.
+          </p>
+
           <div style={{ overflowX: "auto" }}>
             <table>
               <thead>
@@ -124,8 +179,7 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
                   <th>Collateral (USD)</th>
                   <th>Debt (USD)</th>
                   <th>Health factor</th>
-                  <th>LTV</th>
-                  <th>UC frontier</th>
+                  <th>LTV vs. Threshold vs. UC frontier</th>
                   <th>State</th>
                   <th>Bad debt (USD)</th>
                 </tr>
@@ -137,8 +191,19 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
                     <td className="num">${Math.round(row.collateralUsd).toLocaleString()}</td>
                     <td className="num">${Math.round(row.debtUsd).toLocaleString()}</td>
                     <td className="num">{row.healthFactor === null ? "—" : row.healthFactor.toFixed(3)}</td>
-                    <td className="num">{row.ltvPct === null ? "—" : `${row.ltvPct.toFixed(1)}%`}</td>
-                    <td className="num">{row.ucFrontierPct.toFixed(1)}%</td>
+                    <td>
+                      <LtvLadder
+                        ltvPct={row.ltvPct}
+                        thresholdPct={row.effectiveThresholdPct}
+                        ucFrontierPct={row.ucFrontierPct}
+                        state={row.state}
+                      />
+                      <div className="ltv-ladder-values">
+                        {row.ltvPct === null || row.effectiveThresholdPct === null
+                          ? "—"
+                          : `${row.ltvPct.toFixed(1)}% / ${row.effectiveThresholdPct.toFixed(1)}% / ${row.ucFrontierPct.toFixed(1)}%`}
+                      </div>
+                    </td>
                     <td>
                       <span className={`tag tag-${row.state}`}>{STATE_LABEL[row.state]}</span>
                     </td>

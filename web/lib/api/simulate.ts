@@ -46,7 +46,10 @@ export interface PositionSnapshot {
   debtUsd: number;
   healthFactor: number | null; // null when the position carries no debt
   ltvPct: number | null; // null when collateral value is zero
-  ucFrontierPct: number; // 1/(1+i) for this position's incentive, as a percent
+  // Collateral-value-weighted liquidation threshold, recovered as healthFactor * ltvPct -
+  // the bar LTV must cross to become "liquidatable". Null whenever either input is null.
+  effectiveThresholdPct: number | null;
+  ucFrontierPct: number; // 1/(1+i) for this position's incentive - the bar LTV must cross to become "toxic"
   state: PositionState;
   badDebtUsd: number;
 }

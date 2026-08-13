@@ -225,6 +225,10 @@ function toSnapshot(position: Position, prices: PriceVector) {
   const hf = healthFactor(position, prices);
   const ltv = currentLtv(position, prices);
   const frontier = undercollateralizationFrontier(position.liquidationIncentiveBps);
+  // Mirrors api/src/routes/positions.ts's effectiveThresholdPct: HF * LTV recovers the
+  // collateral-value-weighted liquidation threshold from numbers already computed here.
+  const effectiveThresholdPct =
+    hf === null || ltv === null ? null : Math.round((Number(hf) / 1e18) * (Number(ltv) / 1e18) * 10000) / 100;
   return {
     id: position.id,
     protocol: position.protocol,
@@ -232,6 +236,7 @@ function toSnapshot(position: Position, prices: PriceVector) {
     debtUsd: Number(totalDebtValueUsd8(position, prices)) / USD8,
     healthFactor: hf === null ? null : Number(hf) / 1e18,
     ltvPct: ltv === null ? null : Math.round((Number(ltv) / 1e18) * 10000) / 100,
+    effectiveThresholdPct,
     ucFrontierPct: Math.round((Number(frontier) / 1e18) * 10000) / 100,
     state: positionState(position, prices),
     badDebtUsd: Number(badDebtUsd8(position, prices)) / USD8,
