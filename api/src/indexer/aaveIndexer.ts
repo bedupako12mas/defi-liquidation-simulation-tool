@@ -29,6 +29,7 @@ export async function runAaveIndexSync(
   client: PublicClient,
   db: Kysely<DB>,
   chunkSize?: bigint,
+  enrichBatchSize?: number,
 ): Promise<AaveIndexSyncResult> {
   const finalizedBlock = (await client.getBlock({ blockTag: "finalized" })).number;
 
@@ -81,7 +82,14 @@ export async function runAaveIndexSync(
 
   const { dataProvider } = await resolveAaveAddresses(client);
   const reserveConfigs = await loadReserveConfigs(client);
-  const { positions } = await enrichPositions(client, dataProvider, addresses, reserveConfigs);
+  const { positions } = await enrichPositions(
+    client,
+    dataProvider,
+    addresses,
+    reserveConfigs,
+    undefined,
+    enrichBatchSize,
+  );
   const snapshotId = await syncAaveSnapshot(db, finalizedBlock, reserveConfigs, positions);
 
   return {

@@ -30,27 +30,49 @@ export interface EnrichPositionsResult {
  * dangerous-direction bug (health factor reads healthier than reality) caught in review,
  * not by design.
  */
+// Candidates per multicall batch, not all-at-once. A single (candidates x reserveConfigs)
+// multicall silently failed 100% of ~110,000 calls in real usage - traced to the free-tier
+// RPC rate limit (the same key had just been hammered by discovery's eth_getLogs volume),
+// not a code/ABI bug (a lone readContract/multicall call with the same ABI against the
+// same contract succeeded immediately). Sequential, not Promise.all - same reasoning as
+// aaveBorrowDiscovery.ts's own retry logic: don't multiply load on an already-limited
+// provider. Overridable so a paid tier isn't artificially throttled either.
+const DEFAULT_ENRICH_BATCH_SIZE = 25;
+
 export async function enrichPositions(
   client: PublicClient,
   dataProviderAddress: `0x${string}`,
   candidates: string[],
   reserveConfigs: AaveReserveConfig[],
   blockNumber?: bigint,
+  batchSize: number = DEFAULT_ENRICH_BATCH_SIZE,
 ): Promise<EnrichPositionsResult> {
-  const contracts = candidates.flatMap((user) =>
-    reserveConfigs.map(
-      (reserve) =>
-        ({
-          address: dataProviderAddress,
-          abi: DATA_PROVIDER_ABI,
-          functionName: "getUserReserveData",
-          args: [reserve.asset, user as `0x${string}`],
-        }) as const,
-    ),
-  );
+  type ReserveDataResult =
+    | { status: "success"; result: readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, number, boolean] }
+    | { status: "failure"; error: Error; result?: undefined };
 
-  const results =
-    contracts.length > 0 ? await client.multicall({ contracts, allowFailure: true, blockNumber }) : [];
+  const results: ReserveDataResult[] = [];
+  let totalContracts = 0;
+
+  for (let i = 0; i < candidates.length; i += batchSize) {
+    const batchCandidates = candidates.slice(i, i + batchSize);
+    const contracts = batchCandidates.flatMap((user) =>
+      reserveConfigs.map(
+        (reserve) =>
+          ({
+            address: dataProviderAddress,
+            abi: DATA_PROVIDER_ABI,
+            functionName: "getUserReserveData",
+            args: [reserve.asset, user as `0x${string}`],
+          }) as const,
+      ),
+    );
+
+    if (contracts.length === 0) continue;
+    totalContracts += contracts.length;
+    const batchResults = (await client.multicall({ contracts, allowFailure: true, blockNumber })) as ReserveDataResult[];
+    results.push(...batchResults);
+  }
 
   const positions: Position[] = [];
   let failedCallCount = 0;
@@ -106,7 +128,7 @@ export async function enrichPositions(
 
   if (failedCallCount > 0) {
     console.warn(
-      `[aaveUserEnrichment] ${failedCallCount} of ${contracts.length} getUserReserveData calls failed - ` +
+      `[aaveUserEnrichment] ${failedCallCount} of ${totalContracts} getUserReserveData calls failed - ` +
         `affected positions may be missing real collateral/debt legs`,
     );
   }

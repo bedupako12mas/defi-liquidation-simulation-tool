@@ -16,7 +16,14 @@ async function main() {
     ? BigInt(process.env.AAVE_INDEXER_CHUNK_SIZE)
     : undefined;
 
-  const result = await runAaveIndexSync(publicClient, db, chunkSize);
+  // Same reasoning as chunkSize above, for the enrichment stage - a single unbatched
+  // (candidates x reserves) multicall failed 100% of ~110,000 calls in real usage against
+  // a free-tier RPC already under load from discovery. See aaveUserEnrichment.ts.
+  const enrichBatchSize = process.env.AAVE_ENRICH_BATCH_SIZE
+    ? Number(process.env.AAVE_ENRICH_BATCH_SIZE)
+    : undefined;
+
+  const result = await runAaveIndexSync(publicClient, db, chunkSize, enrichBatchSize);
   console.log(JSON.stringify(result, (_key, value) => (typeof value === "bigint" ? value.toString() : value), 2));
 
   await db.destroy();
