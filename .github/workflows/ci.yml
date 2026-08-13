@@ -182,7 +182,7 @@ jobs:
       # api/Dockerfile applies to resolving third-party Action digests from here).
       - name: Trivy scan
         if: steps.exists.outputs.found == 'true'
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: api:ci
           format: sarif
