@@ -61,48 +61,59 @@ function toPositionSnapshot(position: Position, prices: PriceVector, protocol: P
   };
 }
 
+// The global 20/min limit (server.ts) was sized around /api/simulate's expensive full
+// 81-point sweep per request - it was never sized for this route, which does a single,
+// cheap per-position pass. Dragging PositionDrilldown's magnitude slider around a few
+// times burned through the shared global budget for real (caught live - HTTP 429).
+// Independent, more generous budget, not shared with /api/simulate's stricter one.
+const DRILLDOWN_RATE_LIMIT = { max: 60, timeWindow: "1 minute" };
+
 export function registerPositionsRoute(app: FastifyInstance, deps: { db: Kysely<DB>; client: PublicClient }) {
-  app.get("/api/positions", async (request: FastifyRequest<{ Querystring: PositionsQuery }>, reply) => {
-    const { presetId, magnitudePct, protocol } = request.query;
+  app.get(
+    "/api/positions",
+    { config: { rateLimit: DRILLDOWN_RATE_LIMIT } },
+    async (request: FastifyRequest<{ Querystring: PositionsQuery }>, reply) => {
+      const { presetId, magnitudePct, protocol } = request.query;
 
-    if (protocol !== "aave" && protocol !== "fluid") {
-      reply.code(400).send({ error: `Unknown protocol "${protocol}". Valid: aave, fluid.` });
-      return;
-    }
+      if (protocol !== "aave" && protocol !== "fluid") {
+        reply.code(400).send({ error: `Unknown protocol "${protocol}". Valid: aave, fluid.` });
+        return;
+      }
 
-    const preset = getShockPreset(presetId);
-    if (!preset) {
-      reply.code(400).send({ error: `Unknown presetId "${presetId}".` });
-      return;
-    }
+      const preset = getShockPreset(presetId);
+      if (!preset) {
+        reply.code(400).send({ error: `Unknown presetId "${presetId}".` });
+        return;
+      }
 
-    const magnitude = Number(magnitudePct);
-    if (!Number.isFinite(magnitude) || magnitude > 0 || magnitude < -80) {
-      // Same server-controlled range as /api/simulate's sweep - reject anything outside
-      // it rather than run applyShock on an arbitrary caller-supplied magnitude.
-      reply.code(400).send({ error: "magnitudePct must be a number between -80 and 0." });
-      return;
-    }
+      const magnitude = Number(magnitudePct);
+      if (!Number.isFinite(magnitude) || magnitude > 0 || magnitude < -80) {
+        // Same server-controlled range as /api/simulate's sweep - reject anything outside
+        // it rather than run applyShock on an arbitrary caller-supplied magnitude.
+        reply.code(400).send({ error: "magnitudePct must be a number between -80 and 0." });
+        return;
+      }
 
-    const reserveConfigs = await getCachedReserveConfigs(deps.client);
+      const reserveConfigs = await getCachedReserveConfigs(deps.client);
 
-    if (protocol === "aave") {
-      const snapshot = await loadLatestAaveSnapshot(deps.db);
-      if (!snapshot) return [];
+      if (protocol === "aave") {
+        const snapshot = await loadLatestAaveSnapshot(deps.db);
+        if (!snapshot) return [];
 
-      const assetConfig = Object.fromEntries(reserveConfigs.map((r) => [r.asset, classifyForShock(r)]));
+        const assetConfig = Object.fromEntries(reserveConfigs.map((r) => [r.asset, classifyForShock(r)]));
+        const prices = applyShock(snapshot.basePrices, assetConfig, magnitude / 100, preset);
+
+        return snapshot.positions.map((position) => toPositionSnapshot(position, prices, "aave"));
+      }
+
+      // protocol === "fluid"
+      const snapshot = await loadLatestFluidSnapshot(deps.db);
+      if (!snapshot) return []; // real answer, not an error - no Fluid snapshot synced yet
+
+      const assetConfig = classifyFluidAssets(snapshot.positions, reserveConfigs);
       const prices = applyShock(snapshot.basePrices, assetConfig, magnitude / 100, preset);
 
-      return snapshot.positions.map((position) => toPositionSnapshot(position, prices, "aave"));
-    }
-
-    // protocol === "fluid"
-    const snapshot = await loadLatestFluidSnapshot(deps.db);
-    if (!snapshot) return []; // real answer, not an error - no Fluid snapshot synced yet
-
-    const assetConfig = classifyFluidAssets(snapshot.positions, reserveConfigs);
-    const prices = applyShock(snapshot.basePrices, assetConfig, magnitude / 100, preset);
-
-    return snapshot.positions.map((position) => toPositionSnapshot(position, prices, "fluid"));
-  });
+      return snapshot.positions.map((position) => toPositionSnapshot(position, prices, "fluid"));
+    },
+  );
 }

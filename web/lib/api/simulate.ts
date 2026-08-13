@@ -35,6 +35,18 @@ export interface SweepPoint {
   liquidatablePositionCount: number;
   toxicPositionCount: number;
   badDebtUsd: number;
+
+  // Normalized/diagnostic fields - see api/src/engine/sweep.ts's SweepPoint comments for
+  // the full reasoning (count-based % as the robust primary comparison metric, dollar-
+  // based % and concentration/severity as the metrics that make the raw totals above
+  // interpretable instead of misleading across very differently-sized real samples).
+  totalPositionCount: number;
+  liquidatablePositionPct: number;
+  toxicPositionPct: number;
+  totalCollateralUsd: number;
+  liquidatableCollateralPct: number;
+  concentrationPct: number | null;
+  badDebtSeverityMedian: number | null;
 }
 
 // "eligible" is Fluid's distinct word for the HF<1 boundary - not the same guarantee as

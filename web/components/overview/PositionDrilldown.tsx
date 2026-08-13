@@ -95,7 +95,18 @@ function LtvLadder({
 
 export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] }) {
   const [protocol, setProtocol] = useState<Protocol>("aave");
+  // sliderValue updates on every drag event (immediate UI feedback); magnitudePct - the
+  // value that actually drives fetches - only catches up 400ms after dragging settles.
+  // Without this, /api/positions and /api/market-concentration each fire once per pixel
+  // of slider movement, which burned through the rate limit for real (HTTP 429, caught
+  // live) - see docs/decisions.md.
+  const [sliderValue, setSliderValue] = useState(-30);
   const [magnitudePct, setMagnitudePct] = useState(-30);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMagnitudePct(sliderValue), 400);
+    return () => clearTimeout(timer);
+  }, [sliderValue]);
   // Keyed result, not a bare array - see useSimulationStream.ts's comment for why setState
   // never runs synchronously at the top of the effect (react-hooks/set-state-in-effect):
   // every setState call below happens inside the fetch's .then()/.catch(), and "loading" is
@@ -214,7 +225,7 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
       </div>
 
       <label htmlFor="magnitude-slider" style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-        Shock magnitude: {magnitudePct}%
+        Shock magnitude: {sliderValue}%
       </label>
       <input
         id="magnitude-slider"
@@ -223,8 +234,8 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
         min={MAGNITUDE_MAX}
         max={MAGNITUDE_MIN}
         step={MAGNITUDE_STEP}
-        value={magnitudePct}
-        onChange={(e) => setMagnitudePct(Number(e.target.value))}
+        value={sliderValue}
+        onChange={(e) => setSliderValue(Number(e.target.value))}
       />
 
       {currentError && <div className="banner">Error fetching position snapshot: {currentError}</div>}

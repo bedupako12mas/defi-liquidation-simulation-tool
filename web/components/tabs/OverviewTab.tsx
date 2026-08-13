@@ -8,16 +8,25 @@ import { StreamedChart, type MetricKey } from "@/components/overview/StreamedCha
 import { PositionDrilldown } from "@/components/overview/PositionDrilldown";
 import type { ShockPreset } from "@/lib/api/meta";
 
+// Normalized metrics first, deliberately - they're the fair comparison across Aave's and
+// Fluid's very differently-sized real samples (see docs/decisions.md's "5 rigorous
+// comparison metrics" entry). Raw totals are still available (real numbers, not wrong),
+// just no longer the default first thing shown.
 const METRICS: { key: MetricKey; label: string }[] = [
-  { key: "liquidatableCollateralUsd", label: "Liquidatable collateral" },
-  { key: "toxicPositionCount", label: "Toxic positions" },
-  { key: "badDebtUsd", label: "Bad debt" },
+  { key: "liquidatablePositionPct", label: "Liquidatable/eligible (%)" },
+  { key: "toxicPositionPct", label: "Toxic (%)" },
+  { key: "liquidatableCollateralPct", label: "Liquidatable collateral (%)" },
+  { key: "concentrationPct", label: "Concentration" },
+  { key: "badDebtSeverityMedian", label: "Bad debt severity" },
+  { key: "liquidatableCollateralUsd", label: "Liquidatable collateral (raw $)" },
+  { key: "toxicPositionCount", label: "Toxic positions (raw count)" },
+  { key: "badDebtUsd", label: "Bad debt (raw $)" },
 ];
 
 export function OverviewTab() {
   const { meta, loading, error } = useCapabilities();
   const [presetId, setPresetId] = useState<ShockPreset["id"]>("correlated");
-  const [metric, setMetric] = useState<MetricKey>("liquidatableCollateralUsd");
+  const [metric, setMetric] = useState<MetricKey>("liquidatablePositionPct");
   const stream = useSimulationStream(meta ? presetId : null);
 
   return (

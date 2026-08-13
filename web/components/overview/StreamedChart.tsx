@@ -4,23 +4,51 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import type { SweepPoint } from "@/lib/api/simulate";
 import type { StreamStatus } from "@/lib/hooks/useSimulationStream";
 
-export type MetricKey = "liquidatableCollateralUsd" | "toxicPositionCount" | "badDebtUsd";
+export type MetricKey =
+  | "liquidatableCollateralUsd"
+  | "toxicPositionCount"
+  | "badDebtUsd"
+  | "liquidatablePositionPct"
+  | "toxicPositionPct"
+  | "liquidatableCollateralPct"
+  | "concentrationPct"
+  | "badDebtSeverityMedian";
 
 const METRIC_LABEL: Record<MetricKey, string> = {
-  liquidatableCollateralUsd: "Cumulative liquidatable collateral (USD)",
-  toxicPositionCount: "Positions past the toxic frontier (count)",
-  badDebtUsd: "Cumulative bad debt (USD)",
+  liquidatableCollateralUsd: "Cumulative liquidatable collateral (USD, raw)",
+  toxicPositionCount: "Positions past the toxic frontier (raw count)",
+  badDebtUsd: "Cumulative bad debt (USD, raw)",
+  liquidatablePositionPct: "Liquidatable/eligible - % of sampled positions",
+  toxicPositionPct: "Toxic - % of sampled positions",
+  liquidatableCollateralPct: "Liquidatable collateral - % of sampled collateral",
+  concentrationPct: "Concentration - largest at-risk position's share",
+  badDebtSeverityMedian: "Bad debt severity - median debt/collateral ratio, underwater positions only",
 };
 
-function formatValue(metric: MetricKey, value: number): string {
+// Percentage/ratio metrics can be genuinely null (no at-risk or underwater positions yet
+// at this magnitude) - kept as null through the chart, not coerced to 0, so recharts
+// leaves a real gap instead of implying "zero" where the true answer is "not applicable
+// yet". Raw count/dollar metrics stay at their existing 0-fallback behavior.
+const PCT_METRICS = new Set<MetricKey>([
+  "liquidatablePositionPct",
+  "toxicPositionPct",
+  "liquidatableCollateralPct",
+  "concentrationPct",
+]);
+const RATIO_METRICS = new Set<MetricKey>(["badDebtSeverityMedian"]);
+
+function formatValue(metric: MetricKey, value: number | null): string {
+  if (value === null) return "—";
   if (metric === "toxicPositionCount") return String(Math.round(value));
+  if (PCT_METRICS.has(metric)) return `${value.toFixed(1)}%`;
+  if (RATIO_METRICS.has(metric)) return `${(value * 100).toFixed(0)}%`;
   return `$${Math.round(value).toLocaleString()}`;
 }
 
 interface ChartRow {
   magnitudePct: number;
-  aave: number;
-  fluid: number;
+  aave: number | null;
+  fluid: number | null;
 }
 
 function toChartRows(aave: SweepPoint[], fluid: SweepPoint[], metric: MetricKey): ChartRow[] {
@@ -31,8 +59,8 @@ function toChartRows(aave: SweepPoint[], fluid: SweepPoint[], metric: MetricKey)
   const fluidByMagnitude = new Map(fluid.map((p) => [p.magnitudePct, p]));
   return aave.map((point) => ({
     magnitudePct: point.magnitudePct,
-    aave: point[metric],
-    fluid: fluidByMagnitude.get(point.magnitudePct)?.[metric] ?? 0,
+    aave: point[metric] ?? (PCT_METRICS.has(metric) || RATIO_METRICS.has(metric) ? null : 0),
+    fluid: fluidByMagnitude.get(point.magnitudePct)?.[metric] ?? (PCT_METRICS.has(metric) || RATIO_METRICS.has(metric) ? null : 0),
   }));
 }
 
