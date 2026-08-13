@@ -27,27 +27,20 @@ spec:
       labels:
         app.kubernetes.io/name: api
       # -----------------------------------------------------------------------------------
-      # Vault Agent sidecar injection (HashiCorp Vault Injector webhook), per context.md
-      # §9/§10: "never a k8s Secret applied from a laptop... Vault, injected at runtime."
-      # No `annotations:` block yet, deliberately - enabling this requires a real Vault
-      # instance, a configured Kubernetes auth method, and a policy scoped to this app's
-      # secrets path, none of which exist (see DEPLOYMENT.md for the human steps to create
-      # them). Do NOT add these with a fabricated VAULT_ADDR or role - that either fails pod
-      # admission loudly (safe) or, worse, points at nothing and the app starts with no
-      # secrets and no obvious error (unsafe). Add an `annotations:` map here with real
-      # values once Vault exists:
+      # Vault (k8s/vault/values.yaml) is real and deployed - standalone mode, raft
+      # storage, real encryption at rest, real audit-capable, manual Shamir unseal. It is
+      # the real, encrypted, audited source of truth for api-secrets now (see
+      # docs/decisions.md's Vault entry).
       #
-      # annotations:
-      #   vault.hashicorp.com/agent-inject: "true"
-      #   vault.hashicorp.com/role: "api"                                # Vault K8s-auth role, per env
-      #   vault.hashicorp.com/agent-inject-secret-config.env: "secret/data/api/<ENV>"
-      #   vault.hashicorp.com/agent-inject-template-config.env: |
-      #     {{- with secret "secret/data/api/<ENV>" -}}
-      #     {{- range $k, $v := .Data.data }}
-      #     {{ $k }}={{ $v }}
-      #     {{- end }}
-      #     {{- end }}
-      #   vault.hashicorp.com/agent-pre-populate-only: "true"   # inject once at start, not a long-lived sidecar process, since this app doesn't need live secret rotation without a restart yet
+      # Deliberately NOT wired via the Vault Agent Injector (sidecar auto-injection at pod
+      # start) - that's real production-grade scope (a Kubernetes auth method, per-app
+      # policies, a mutating webhook, its own resource footprint) this single-service,
+      # cost-constrained deployment doesn't need yet. Secrets flow Vault -> k8s Secret via
+      # scripts/sync-secrets-from-vault.sh (run after any secret rotation in Vault, or
+      # after a deploy resets the Secret), and the pod still reads the resulting Secret via
+      # the same envFrom block below. Vault owns correctness/audit of the secret value;
+      # this bridge owns delivery to the pod - not the same mechanism, deliberately kept
+      # separate rather than conflated.
     spec:
       # This pod never calls the Kubernetes API itself - don't hand it a token that could
       # be used to (CIS Kubernetes Benchmark 5.1.6 / OWASP A06 - Insecure Design: least
@@ -85,24 +78,13 @@ spec:
             - name: http
               containerPort: 4000 # matches PORT default in api/Dockerfile
           # -----------------------------------------------------------------------------
-          # TEMPORARY BRIDGE, not the target state - see the Vault comment above. Without
-          # something here, the pod crash-loops immediately: src/server.ts's
+          # Delivery mechanism, deliberately kept simple - see the Vault comment above.
+          # Without something here, the pod crash-loops immediately: src/server.ts's
           # assertAllowedChain() and src/db/client.ts both throw at startup if
-          # RPC_URL_MAINNET / DATABASE_URL are unset, and there is currently no real Vault
-          # instance to inject them. Until Vault is actually stood up (DEPLOYMENT.md §4),
-          # a human creates a plain Kubernetes Secret out of band, once per namespace, and
-          # this references it by name:
-          #
-          #   kubectl create secret generic api-secrets \
-          #     --namespace liquidation-sim-<env> \
-          #     --from-literal=DATABASE_URL='<real prod connection string>' \
-          #     --from-literal=RPC_URL_MAINNET='<real Alchemy URL>'
-          #
-          # Never committed, never typed into chat/CI - same "human types the real value"
-          # discipline as every other secret in this project, just via kubectl instead of
-          # a Vault UI. Delete this envFrom block (and the Secret) the day the Vault
-          # annotations above go live - the two mechanisms should never both be wiring the
-          # same env vars in at once.
+          # RPC_URL_MAINNET / DATABASE_URL are unset. The Secret this references is kept
+          # in sync with Vault's real values via scripts/sync-secrets-from-vault.sh, run
+          # once per namespace and re-run after any rotation - not hand-typed ad hoc
+          # anymore, Vault is the actual source of truth now.
           envFrom:
             - secretRef:
                 name: api-secrets

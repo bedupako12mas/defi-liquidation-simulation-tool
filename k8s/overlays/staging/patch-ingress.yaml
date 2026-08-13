@@ -1,13 +1,20 @@
-# PLACEHOLDER HOSTNAME - no real domain/DNS/Cloudflare zone exists yet for staging. Replace
-# with the real subdomain once one is registered and pointed at Cloudflare (see
-# DEPLOYMENT.md).
+# Real, working hostname - nip.io (64.225.85.246 is this cluster's real Load Balancer IP,
+# see docs/decisions.md). Deliberately not a registered domain behind Cloudflare (see the
+# tech-stack decisions entry: Cloudflare was assessed and consciously not added for this
+# deployment's scope). This was previously a live-only kubectl patch that a real CI/CD
+# deploy then silently overwrote on every push - committing the real value here is what
+# actually fixes that, not another live patch.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: api
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
 spec:
   rules:
-    - host: staging-api.example.invalid
+    - host: 64-225-85-246.nip.io
       http:
         paths:
           - path: /
@@ -17,3 +24,7 @@ spec:
                 name: api
                 port:
                   name: http
+  tls:
+    - hosts:
+        - 64-225-85-246.nip.io
+      secretName: api-tls

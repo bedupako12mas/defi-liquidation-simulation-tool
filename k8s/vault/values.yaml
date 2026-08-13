@@ -1,0 +1,56 @@
+# Minimal, real (not dev-mode) Vault - scoped deliberately to what this deployment
+# actually needs, not full production-grade HA. See docs/decisions.md.
+server:
+  # Standalone with raft storage - real persistence, real encryption at rest, manual
+  # Shamir unseal (no cloud KMS available for auto-unseal without new infra/cost).
+  standalone:
+    enabled: true
+    config: |
+      ui = true
+      listener "tcp" {
+        tls_disable = 1
+        address = "[::]:8200"
+        cluster_address = "[::]:8201"
+      }
+      storage "raft" {
+        path = "/vault/data"
+      }
+
+  # Cluster-internal only - no public Ingress, no LoadBalancer. Reachable only from
+  # pods inside the cluster (the API) and via kubectl port-forward for admin.
+  service:
+    enabled: true
+    type: ClusterIP
+
+  dataStorage:
+    enabled: true
+    size: 1Gi
+    storageClass: do-block-storage
+
+  # Sized to fit the actual remaining node headroom (~108m CPU / ~536Mi memory after
+  # staging + prod), not a production sizing guideline.
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "96Mi"
+    limits:
+      cpu: "150m"
+      memory: "192Mi"
+
+  extraEnvironmentVars: {}
+
+  # No auto-init/auto-unseal helpers - deliberate, so the init step (and its one-time
+  # display of unseal keys/root token) happens under direct control, not silently.
+  extraArgs: ""
+
+ui:
+  enabled: true
+  serviceType: ClusterIP
+
+# Injector adds a whole second deployment (mutating webhook + sidecar-injection) - real
+# resource cost this cluster doesn't have room for right now, and more than this
+# deployment's scope needs. Secrets are synced from Vault into the existing k8s Secret
+# via a controlled script instead (docs/decisions.md) - Vault becomes the real,
+# encrypted, audited source of truth; the delivery mechanism to the pod is unchanged.
+injector:
+  enabled: false

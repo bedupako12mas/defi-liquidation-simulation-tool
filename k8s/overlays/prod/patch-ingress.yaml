@@ -1,14 +1,19 @@
-# PLACEHOLDER HOSTNAME - no real domain/DNS/Cloudflare zone exists yet for prod. Replace
-# with the real apex/subdomain once one is registered and pointed at Cloudflare (see
-# DEPLOYMENT.md). Do not treat "example.invalid" as a real value under any circumstances -
-# it's IANA's reserved-for-documentation TLD specifically so it can never resolve.
+# Real, working hostname - nip.io, same cluster/LB IP as staging (64.225.85.246), a
+# "prod." subdomain prefix so ingress-nginx's host-based routing sends it to this
+# namespace's Ingress rather than staging's. Deliberately not a registered domain behind
+# Cloudflare (see docs/decisions.md's tech-stack entry - assessed and consciously skipped
+# for this deployment's scope).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: api
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
 spec:
   rules:
-    - host: api.example.invalid
+    - host: prod.64-225-85-246.nip.io
       http:
         paths:
           - path: /
@@ -18,3 +23,7 @@ spec:
                 name: api
                 port:
                   name: http
+  tls:
+    - hosts:
+        - prod.64-225-85-246.nip.io
+      secretName: api-tls-prod
