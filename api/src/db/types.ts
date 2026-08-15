@@ -55,10 +55,29 @@ export interface ProtocolParamsTable {
   price_usd8: Numeric;
 }
 
+/** Written by scripts/sync-validation-results.ts (#30/#36) - real, state-override eth_call
+ *  results against real positions, too slow/costly to compute live per page load, so
+ *  persisted here and served from the latest sync (same pattern as snapshots/positions). */
+export interface ValidationResultsTable {
+  id: Generated<number>;
+  protocol: "aave" | "fluid";
+  position_id: string;
+  preset_id: string;
+  magnitude_pct: Numeric;
+  /** "matched" | "mismatched" | "not-applicable" | "unable-to-validate" | "unexpected-revert" -
+   *  kept as plain text (not a DB enum) so a newly-discovered real status doesn't need a migration. */
+  status: string;
+  expected_amount: ColumnType<string | null, string | bigint | null | undefined, string | null>;
+  actual_amount: ColumnType<string | null, string | bigint | null | undefined, string | null>;
+  detail: string | null;
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
 export interface DB {
   snapshots: SnapshotsTable;
   indexer_progress: IndexerProgressTable;
   aave_borrow_candidates: AaveBorrowCandidatesTable;
   positions: PositionsTable;
   protocol_params: ProtocolParamsTable;
+  validation_results: ValidationResultsTable;
 }

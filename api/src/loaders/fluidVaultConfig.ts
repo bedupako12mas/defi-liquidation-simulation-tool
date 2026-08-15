@@ -39,12 +39,21 @@ export interface FluidVaultConfig {
    *  targetDecimals below). Converting this to USD is fluidPriceResolution.ts's job, not
    *  this file's - this loader only reads real on-chain state, unmodified. */
   oraclePriceLiquidateRaw: bigint;
+  /** The vault's configured IFluidOracle contract address (Configs.oracle) - not previously
+   *  surfaced here since nothing needed the address itself before, only the pre-fetched
+   *  price value above. Needed by fluidValidator.ts to override the oracle's raw rate
+   *  source directly and let Fluid's own real getExchangeRateLiquidate() recompute from it. */
+  oracle: `0x${string}`;
   /** contracts/oracle/fluidOracle.sol: targetDecimals = borrowDecimals + (27 -
    *  supplyDecimals). Computed here (not fetched - both decimals are already read above),
    *  verified against a real vault: ETH(18)/USDC(6) -> 15, and
    *  1880373467381393293n / 10^15 = 1880.37... - a plausible real ETH/USD price. */
   targetDecimals: number;
   totalPositions: bigint;
+  /** Real vault-level total borrow (raw, borrowToken decimals) - used by fluidValidator.ts
+   *  as a grounded, real basis for choosing a liquidate() sweep size, not an arbitrary
+   *  guess. */
+  totalBorrowVault: bigint;
 }
 
 export async function loadFluidVaultConfigs(client: PublicClient): Promise<FluidVaultConfig[]> {
@@ -63,7 +72,9 @@ export async function loadFluidVaultConfigs(client: PublicClient): Promise<Fluid
     liquidationThresholdBps: BigInt(v.configs.liquidationThreshold),
     liquidationIncentiveBps: BigInt(v.configs.liquidationPenalty),
     oraclePriceLiquidateRaw: v.configs.oraclePriceLiquidate,
+    oracle: v.configs.oracle,
     targetDecimals: v.constantVariables.borrowDecimals + (27 - v.constantVariables.supplyDecimals),
     totalPositions: v.vaultState.totalPositions,
+    totalBorrowVault: v.totalSupplyAndBorrow.totalBorrowVault,
   }));
 }

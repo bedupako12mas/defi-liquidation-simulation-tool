@@ -8,6 +8,7 @@ import { registerMetaRoute } from "./routes/meta.js";
 import { registerSimulateRoute } from "./routes/simulate.js";
 import { registerPositionsRoute } from "./routes/positions.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.js";
+import { registerValidationResultsRoutes } from "./routes/validationResults.js";
 
 const app = Fastify({ logger: true });
 
@@ -54,6 +55,7 @@ registerMetaRoute(app, { db, client: publicClient });
 registerSimulateRoute(app, { db, client: publicClient, allowedOrigins });
 registerPositionsRoute(app, { db, client: publicClient });
 registerAnalyticsRoutes(app, { db, client: publicClient });
+registerValidationResultsRoutes(app, { db });
 
 app.get("/health", async () => ({ ok: true }));
 
