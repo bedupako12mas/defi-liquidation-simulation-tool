@@ -30,6 +30,7 @@ export async function runAaveIndexSync(
   db: Kysely<DB>,
   chunkSize?: bigint,
   enrichBatchSize?: number,
+  enrichInterBatchDelayMs?: number,
 ): Promise<AaveIndexSyncResult> {
   const finalizedBlock = (await client.getBlock({ blockTag: "finalized" })).number;
 
@@ -89,6 +90,7 @@ export async function runAaveIndexSync(
     reserveConfigs,
     undefined,
     enrichBatchSize,
+    enrichInterBatchDelayMs,
   );
   const snapshotId = await syncAaveSnapshot(db, finalizedBlock, reserveConfigs, positions);
 

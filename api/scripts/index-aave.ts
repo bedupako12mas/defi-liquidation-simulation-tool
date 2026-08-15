@@ -24,7 +24,14 @@ async function main() {
     ? Number(process.env.AAVE_ENRICH_BATCH_SIZE)
     : undefined;
 
-  const result = await runAaveIndexSync(publicClient, db, chunkSize, enrichBatchSize);
+  // Batch size alone (25->15) didn't fix a later real 69% failure rate at wide-backfill
+  // scale - task #51 traced it to sustained request RATE, not batch SIZE (a small, fast
+  // test at the same batch size had zero failures). This paces requests instead.
+  const enrichInterBatchDelayMs = process.env.AAVE_ENRICH_INTER_BATCH_DELAY_MS
+    ? Number(process.env.AAVE_ENRICH_INTER_BATCH_DELAY_MS)
+    : undefined;
+
+  const result = await runAaveIndexSync(publicClient, db, chunkSize, enrichBatchSize, enrichInterBatchDelayMs);
   console.log(JSON.stringify(result, (_key, value) => (typeof value === "bigint" ? value.toString() : value), 2));
 
   await db.destroy();

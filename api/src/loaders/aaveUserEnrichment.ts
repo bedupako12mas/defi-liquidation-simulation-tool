@@ -39,6 +39,20 @@ export interface EnrichPositionsResult {
 // provider. Overridable so a paid tier isn't artificially throttled either.
 const DEFAULT_ENRICH_BATCH_SIZE = 25;
 
+// A real, confirmed run of 4,958 calls at batchSize=15 with zero pacing produced zero
+// failures (task #51's isolated diagnostic) - ruling out a structural/interface problem.
+// The original 69% failure only showed up at real widening-run scale (thousands of calls,
+// several minutes of sustained load), which a quick small test can't reproduce - consistent
+// with rate limiting that only bites under sustained load, not a per-batch defect. Dropping
+// batch size (25->15) alone didn't help because batch size controls request SIZE, not
+// request RATE - this pacing delay targets the actual lever. Overridable for the same
+// reason batch size is: a paid tier shouldn't be artificially throttled either.
+const DEFAULT_INTER_BATCH_DELAY_MS = 250;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function enrichPositions(
   client: PublicClient,
   dataProviderAddress: `0x${string}`,
@@ -46,6 +60,7 @@ export async function enrichPositions(
   reserveConfigs: AaveReserveConfig[],
   blockNumber?: bigint,
   batchSize: number = DEFAULT_ENRICH_BATCH_SIZE,
+  interBatchDelayMs: number = DEFAULT_INTER_BATCH_DELAY_MS,
 ): Promise<EnrichPositionsResult> {
   type ReserveDataResult =
     | { status: "success"; result: readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, number, boolean] }
@@ -72,10 +87,18 @@ export async function enrichPositions(
     totalContracts += contracts.length;
     const batchResults = (await client.multicall({ contracts, allowFailure: true, blockNumber })) as ReserveDataResult[];
     results.push(...batchResults);
+
+    if (interBatchDelayMs > 0 && i + batchSize < candidates.length) {
+      await sleep(interBatchDelayMs);
+    }
   }
 
   const positions: Position[] = [];
   let failedCallCount = 0;
+  // Sampled, not exhaustive - enough to see the real failure shape (rate limit vs.
+  // timeout vs. something else) without bloating logs when failures are widespread.
+  const failureSample: string[] = [];
+  const FAILURE_SAMPLE_SIZE = 8;
 
   for (let ci = 0; ci < candidates.length; ci++) {
     const user = candidates[ci];
@@ -90,6 +113,11 @@ export async function enrichPositions(
       if (!reserve || !result) continue;
       if (result.status !== "success") {
         failedCallCount++;
+        if (failureSample.length < FAILURE_SAMPLE_SIZE) {
+          const name = result.error?.name ?? "UnknownError";
+          const message = (result.error?.message ?? "").split("\n")[0]?.slice(0, 160) ?? "";
+          failureSample.push(`${name}: ${message}`);
+        }
         continue;
       }
 
@@ -129,7 +157,8 @@ export async function enrichPositions(
   if (failedCallCount > 0) {
     console.warn(
       `[aaveUserEnrichment] ${failedCallCount} of ${totalContracts} getUserReserveData calls failed - ` +
-        `affected positions may be missing real collateral/debt legs`,
+        `affected positions may be missing real collateral/debt legs. Sample of ${failureSample.length} ` +
+        `failure reason(s):\n  ${failureSample.join("\n  ")}`,
     );
   }
 
