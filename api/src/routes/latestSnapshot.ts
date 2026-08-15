@@ -1,6 +1,7 @@
 import type { Kysely } from "kysely";
 import type { DB } from "../db/types.js";
 import type { CollateralLeg, DebtLeg, Position, PriceVector } from "../engine/types.js";
+import { redactError } from "../rpc/redact.js";
 
 export interface LoadedSnapshot {
   snapshotId: number;
@@ -52,7 +53,7 @@ export async function loadLatestAaveSnapshot(db: Kysely<DB>): Promise<LoadedSnap
       // warning instead of crashing the whole snapshot for every position. Matches the
       // pattern already established in aaveReserveConfig.ts for a failed reserve.
       skippedPositions++;
-      console.warn(`[latestSnapshot] skipped malformed position row (id=${row.id}):`, err);
+      console.warn(`[latestSnapshot] skipped malformed position row (id=${row.id}):`, redactError(err));
     }
   }
 
@@ -105,7 +106,7 @@ export async function loadLatestFluidSnapshot(db: Kysely<DB>): Promise<LoadedSna
       });
     } catch (err) {
       skippedPositions++;
-      console.warn(`[latestSnapshot] skipped malformed fluid position row (id=${row.id}):`, err);
+      console.warn(`[latestSnapshot] skipped malformed fluid position row (id=${row.id}):`, redactError(err));
     }
   }
 
@@ -138,7 +139,7 @@ function parseBigintLegs<T extends { amount: bigint }>(raw: unknown): T[] {
           : {}),
       } as T);
     } catch (err) {
-      console.warn("[latestSnapshot] skipped malformed leg:", leg, err);
+      console.warn("[latestSnapshot] skipped malformed leg:", leg, redactError(err));
     }
   }
   return parsed;

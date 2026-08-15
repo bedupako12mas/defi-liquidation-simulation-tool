@@ -8,6 +8,7 @@ import { getCachedReserveConfigs } from "./reserveConfigCache.js";
 import { classifyForShock } from "./aaveShockClassification.js";
 import { classifyFluidAssets } from "./fluidShockClassification.js";
 import { loadLatestAaveSnapshot, loadLatestFluidSnapshot } from "./latestSnapshot.js";
+import { redactError } from "../rpc/redact.js";
 
 function sendEvent(reply: FastifyReply, event: string, data: unknown) {
   reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -134,13 +135,15 @@ export function registerSimulateRoute(
           sendEvent(reply, "done", { preset });
         }
       } catch (err) {
-        // Never forward err.message here - a live RPC/DB error can embed a credential-
-        // bearing URL (viem's HttpRequestError includes the request URL; RPC_URL_MAINNET
-        // carries the Alchemy key in its path). Logged in full server-side via app.log,
-        // the client gets a generic message. Same reasoning as server.ts's global
-        // setErrorHandler, applied here too since this route catches its own errors
-        // instead of letting them reach that handler.
-        app.log.error(err);
+        // Never forward err.message to the client - a live RPC/DB error can embed a
+        // credential-bearing URL (viem's HttpRequestError includes the request URL;
+        // RPC_URL_MAINNET carries the Alchemy key in its path). The client only ever gets
+        // a generic message. Server-side, app.log.error(err) would have the same problem
+        // one level removed - pino's default err serializer prints .message/.stack (and a
+        // viem BaseError's .details/.shortMessage/.metaMessages) straight into the server
+        // logs, so route it through redactError first. See redact.ts and server.ts's
+        // global setErrorHandler, which applies the same treatment.
+        app.log.error(redactError(err));
         sendEvent(reply, "error", { message: "Simulation failed." });
       } finally {
         activeStreams--;

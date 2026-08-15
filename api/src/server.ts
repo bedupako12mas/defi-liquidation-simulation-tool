@@ -2,6 +2,7 @@ import Fastify, { type FastifyError } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import { publicClient, assertAllowedChain } from "./rpc/client.js";
+import { redactError } from "./rpc/redact.js";
 import { db } from "./db/client.js";
 import { registerMetaRoute } from "./routes/meta.js";
 import { registerSimulateRoute } from "./routes/simulate.js";
@@ -41,7 +42,11 @@ await app.register(rateLimit, {
 // real error a live provider throws. Logged in full server-side; the client gets a
 // generic message.
 app.setErrorHandler((error: FastifyError, request, reply) => {
-  app.log.error(error);
+  // redactError, not the raw error object - see redact.ts and the comment above: pino's
+  // default err serializer would otherwise happily print .message/.stack (and, for a
+  // viem BaseError, .details/.shortMessage/.metaMessages) containing the live RPC/DB URL
+  // straight into the server logs.
+  app.log.error(redactError(error));
   reply.status(error.statusCode ?? 500).send({ error: "Internal server error" });
 });
 
@@ -70,6 +75,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  app.log.error(err);
+  app.log.error(redactError(err));
   process.exit(1);
 });

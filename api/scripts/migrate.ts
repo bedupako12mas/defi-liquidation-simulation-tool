@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { promises as fs } from "node:fs";
 import { Migrator, FileMigrationProvider } from "kysely/migration";
 import { db } from "../src/db/client.js";
+import { redactError } from "../src/rpc/redact.js";
 
 const migrationFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -24,7 +25,9 @@ for (const result of results ?? []) {
 }
 
 if (error) {
-  console.error("[migration] failed:", error);
+  // See redact.ts - a pg connection error can embed DATABASE_URL, credentials included,
+  // directly in its .message.
+  console.error("[migration] failed:", redactError(error));
   process.exit(1);
 }
 

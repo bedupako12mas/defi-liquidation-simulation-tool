@@ -1,6 +1,7 @@
 import { publicClient, assertAllowedChain } from "../src/rpc/client.js";
 import { db } from "../src/db/client.js";
 import { validateAaveHealthFactors } from "../src/validation/aaveHealthFactorValidation.js";
+import { redactError } from "../src/rpc/redact.js";
 
 const SAMPLE_SIZE = Number(process.env.VALIDATION_SAMPLE_SIZE ?? "50");
 
@@ -48,6 +49,8 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  // See redact.ts - a raw console.error(err) here can print the RPC_URL_MAINNET/
+  // DATABASE_URL credential embedded in a viem/pg error's own message.
+  console.error(redactError(err));
   process.exitCode = 1;
 });

@@ -1,6 +1,7 @@
 import { publicClient, assertAllowedChain } from "../src/rpc/client.js";
 import { db } from "../src/db/client.js";
 import { runAaveIndexSync } from "../src/indexer/aaveIndexer.js";
+import { redactError } from "../src/rpc/redact.js";
 
 async function main() {
   // Fail loud before doing any chain work, not partway through - same pattern as every
@@ -30,6 +31,9 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  // See redact.ts - both viem (RPC_URL_MAINNET) and pg (DATABASE_URL) errors can embed
+  // the raw connection URL, credentials included, directly in .message/.details/.stack.
+  // A bare console.error(err) here would print that straight to the terminal/log.
+  console.error(redactError(err));
   process.exitCode = 1;
 });
