@@ -8,10 +8,22 @@ describe("fetchMeta (mock mode)", () => {
     expect(meta.capabilities).toEqual({ rpc: true, fork: false });
   });
 
-  it("returns all three named presets", async () => {
+  it("returns all five named presets", async () => {
     const meta = await fetchMeta();
     const ids = meta.presets.map((p) => p.id).sort();
-    expect(ids).toEqual(["correlated", "mild-depeg", "severe-depeg"]);
+    expect(ids).toEqual([
+      "correlated",
+      "lst-slashing-hypothetical",
+      "mild-depeg",
+      "severe-depeg",
+      "stablecoin-depeg",
+    ]);
+  });
+
+  it("flags the hypothetical preset as hypothetical, and only that one", async () => {
+    const meta = await fetchMeta();
+    const hypothetical = meta.presets.filter((p) => p.isHypothetical).map((p) => p.id);
+    expect(hypothetical).toEqual(["lst-slashing-hypothetical"]);
   });
 
   it("every ucFrontier row satisfies LTV_UC = 1/(1+i) within rounding tolerance", async () => {

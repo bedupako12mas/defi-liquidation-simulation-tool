@@ -20,29 +20,69 @@ export const SHOCK_PRESETS: Record<ShockPreset["id"], ShockPreset> = {
     id: "correlated",
     label: "Correlated (no depeg)",
     depegSpread: 0,
-    citation: "Normal-regime behaviour: LSTs track ETH ~1:1 (beta ≈ 1.0), no additional spread.",
+    stablecoinDepegSpread: 0,
+    citation:
+      "Normal-regime behaviour: LSTs track ETH ~1:1 (beta ≈ 1.0), no additional spread. The " +
+      "swept range itself (0 to -80%) comfortably covers real severe single-day moves - e.g. " +
+      "the March 12-13 2020 \"Black Thursday\" crash, where ETH fell roughly 50% in a day - " +
+      "without needing a separate preset for that event; it's already inside this range.",
   },
   "mild-depeg": {
     id: "mild-depeg",
     label: "Mild depeg",
     depegSpread: 0.02,
+    stablecoinDepegSpread: 0,
+    priceComponent: "internal-exchange-rate",
     citation:
       "Illustrative normal-stress spread (1-3% range) - no large historical LRT depeg exists to calibrate against. Assumption, not fitted data.",
   },
   "severe-depeg": {
     id: "severe-depeg",
-    label: "Severe depeg",
+    label: "Severe depeg (LST)",
     depegSpread: 0.07,
+    stablecoinDepegSpread: 0,
+    priceComponent: "internal-exchange-rate",
     citation:
       "Grounded in the real June 2022 stETH depeg: 0.9474 ETH on Curve, 21:00 UTC June 10 2022, widening to ~6-7% mid-June (Celsius/3AC/Alameda unwind).",
+  },
+  "stablecoin-depeg": {
+    id: "stablecoin-depeg",
+    label: "Stablecoin depeg (USDC/SVB)",
+    depegSpread: 0,
+    stablecoinDepegSpread: 0.12,
+    priceComponent: "market",
+    citation:
+      "Grounded in the real March 11 2023 USDC depeg: USDC traded as low as ~$0.88 on-chain " +
+      "after Silicon Valley Bank's collapse threatened Circle's reserves, before recovering " +
+      "once Circle confirmed reserves were intact. A plain market-price event, not a " +
+      "wrapper-accounting one - no yield-bearing wrapper is involved for raw USDC/USDT/DAI.",
+  },
+  "lst-slashing-hypothetical": {
+    id: "lst-slashing-hypothetical",
+    label: "LST slashing event (hypothetical)",
+    depegSpread: 0.15,
+    stablecoinDepegSpread: 0,
+    priceComponent: "internal-exchange-rate",
+    isHypothetical: true,
+    citation:
+      "Hypothetical, not historically grounded - no real LST slashing event at this scale has " +
+      "occurred. Models a genuine drop in a wrapper's own internal accounting rate (e.g. " +
+      "wstETH's stEthPerToken()), the specific scenario Fluid's avoidForcedLiquidations " +
+      "guardian flag exists to dampen (when enabled for the asset) - included to stress-test " +
+      "that protection, not to claim this has happened.",
   },
 };
 
 export interface AssetShockConfig {
   /** Correlation beta relative to the shock driver (ETH). 1.0 = moves 1:1 with ETH, 0 = unaffected. */
   beta: number;
-  /** Whether the preset's depeg spread applies to this asset (true for LSTs, false for ETH itself and stables). */
+  /** Whether the preset's LST depeg spread applies to this asset (true for LSTs, false for ETH itself and stables). */
   subjectToDepeg: boolean;
+  /** Whether the preset's stablecoin depeg spread applies to this asset (true for plain,
+   *  non-wrapped stablecoins - USDC/USDT/DAI. False for everything else, including LSTs -
+   *  these are two different real phenomena with two different real triggers, deliberately
+   *  never both true for the same asset.) */
+  subjectToStablecoinDepeg: boolean;
 }
 
 /**
@@ -64,11 +104,17 @@ export function applyShock(
 ): PriceVector {
   const shocked: PriceVector = {};
   for (const [asset, basePrice] of Object.entries(basePrices)) {
-    const cfg = assetConfig[asset] ?? { beta: 0, subjectToDepeg: false };
+    const cfg = assetConfig[asset] ?? { beta: 0, subjectToDepeg: false, subjectToStablecoinDepeg: false };
     let multiplier = 1 + cfg.beta * magnitude;
     // Depeg only bites on the downside, and only for assets flagged as LST/correlated.
     if (cfg.subjectToDepeg && magnitude < 0) {
       multiplier *= 1 - preset.depegSpread;
+    }
+    // Same shape, independent dial - a stablecoin depeg (market panic, e.g. USDC/SVB) is a
+    // different real phenomenon from an LST depeg, never the same asset (see
+    // AssetShockConfig's comment), so this never compounds with the branch above in practice.
+    if (cfg.subjectToStablecoinDepeg && magnitude < 0) {
+      multiplier *= 1 - preset.stablecoinDepegSpread;
     }
     if (multiplier < 0) multiplier = 0;
     shocked[asset] = BigInt(Math.round(Number(basePrice) * multiplier));

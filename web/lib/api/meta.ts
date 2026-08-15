@@ -24,9 +24,12 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:40
 export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_API !== "false";
 
 export interface ShockPreset {
-  id: "correlated" | "mild-depeg" | "severe-depeg";
+  id: "correlated" | "mild-depeg" | "severe-depeg" | "stablecoin-depeg" | "lst-slashing-hypothetical";
   label: string;
   depegSpread: number;
+  stablecoinDepegSpread: number;
+  priceComponent?: "market" | "internal-exchange-rate";
+  isHypothetical?: boolean;
   citation: string;
 }
 

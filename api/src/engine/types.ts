@@ -46,9 +46,29 @@ export interface Position {
 export type PriceVector = Record<Address, bigint>;
 
 export interface ShockPreset {
-  id: "correlated" | "mild-depeg" | "severe-depeg";
+  id: "correlated" | "mild-depeg" | "severe-depeg" | "stablecoin-depeg" | "lst-slashing-hypothetical";
   label: string;
   /** Extra underperformance of LSTs vs ETH, as a fraction (0.07 = 7%). */
   depegSpread: number;
+  /** Extra underperformance of plain stablecoins vs their $1 peg, as a fraction. Separate
+   *  from depegSpread - a stablecoin depeg (market-price event, e.g. USDC/SVB) and an LST
+   *  depeg are different real phenomena with different real triggers, not one dial. */
+  stablecoinDepegSpread: number;
+  /** Which on-chain price signal this preset's depeg represents, for yield-bearing-wrapper
+   *  assets specifically (wstETH, sUSDe-style - assets with both a market price and a
+   *  separate internal exchange rate). "internal-exchange-rate" means the depeg represents
+   *  the wrapper's own accounting rate moving (e.g. a real slashing event) - the case
+   *  Fluid's avoidForcedLiquidations guardian flag can dampen. "market" means an ordinary
+   *  market-price move, which passes through uncapped for every asset regardless of
+   *  wrapper status. Irrelevant (omit) for plain, non-wrapped assets - a stablecoin or ETH
+   *  itself only ever has one price, so the distinction doesn't apply to them at all.
+   *  Confirmed against real source this session, not assumed - see fluidCappedRate.sol's
+   *  getExchangeRateLiquidate() vs the raw Chainlink ETH/USD feed. */
+  priceComponent?: "market" | "internal-exchange-rate";
+  /** True for presets with no real historical event to cite (a hypothetical stress test,
+   *  e.g. a slashing scenario that's never happened at scale) - must be surfaced to the
+   *  user as explicitly hypothetical, not presented with the same evidentiary weight as a
+   *  preset grounded in a real, cited event. */
+  isHypothetical?: boolean;
   citation: string;
 }

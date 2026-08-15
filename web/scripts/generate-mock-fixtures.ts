@@ -113,10 +113,12 @@ const BASE_PRICES: PriceVector = {
 };
 
 const ASSET_SHOCK_CONFIG: Record<string, AssetShockConfig> = {
-  WETH: { beta: 1, subjectToDepeg: false },
-  WSTETH: { beta: 1, subjectToDepeg: true },
-  WEETH: { beta: 1, subjectToDepeg: true },
-  USDC: { beta: 0, subjectToDepeg: false },
+  WETH: { beta: 1, subjectToDepeg: false, subjectToStablecoinDepeg: false },
+  WSTETH: { beta: 1, subjectToDepeg: true, subjectToStablecoinDepeg: false },
+  WEETH: { beta: 1, subjectToDepeg: true, subjectToStablecoinDepeg: false },
+  // Matches classifySymbolForShock's real classification, not held artificially flat -
+  // the stablecoin-depeg preset needs USDC to actually move in mock mode to be honest.
+  USDC: { beta: 0, subjectToDepeg: false, subjectToStablecoinDepeg: true },
 };
 
 // ---------------------------------------------------------------------------------------

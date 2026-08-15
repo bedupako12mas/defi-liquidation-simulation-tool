@@ -25,7 +25,16 @@ export function PresetSelector({
           </button>
         ))}
       </div>
-      {active && <p className="preset-note">{active.citation}</p>}
+      {active && (
+        <p className="preset-note">
+          {active.isHypothetical && (
+            <span className="tag tag-illustrative" style={{ marginRight: "0.5rem" }}>
+              hypothetical
+            </span>
+          )}
+          {active.citation}
+        </p>
+      )}
     </div>
   );
 }

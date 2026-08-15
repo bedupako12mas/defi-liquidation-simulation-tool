@@ -30,17 +30,30 @@ export function classifySymbolForShock(symbol: string): AssetShockConfig {
   const upper = symbol.toUpperCase();
 
   if (upper === "WETH") {
-    return { beta: 1.0, subjectToDepeg: false }; // the reference asset itself
+    return { beta: 1.0, subjectToDepeg: false, subjectToStablecoinDepeg: false }; // the reference asset itself
   }
 
   const ethLikeSuffixes = ["STETH", "CBETH", "RETH", "WEETH", "OSETH", "ETHX", "RSETH", "EZETH", "TETH"];
   if (ethLikeSuffixes.some((s) => upper.includes(s))) {
-    return { beta: 1.0, subjectToDepeg: true }; // ETH LST/LRT - can depeg from ETH
+    // ETH LST/LRT - can depeg from ETH. Deliberately not also stablecoin-depeg-eligible -
+    // see AssetShockConfig's comment, these are two different real phenomena.
+    return { beta: 1.0, subjectToDepeg: true, subjectToStablecoinDepeg: false };
   }
 
-  // Everything else (BTC-correlated, stables, governance/other tokens, Pendle PT
-  // wrappers) - held flat. Not part of this shock model's ETH/LST depeg story.
-  return { beta: 0, subjectToDepeg: false };
+  // Plain, non-yield-bearing stablecoins only - a real market-price depeg risk (March 2023
+  // USDC/SVB is the cited case), distinct from an LST depeg. Deliberately excludes
+  // yield-bearing stablecoin wrappers (sUSDe-style) - those have the same market-vs-
+  // internal-rate duality as an LST, not this one; out of scope until a wrapper-specific
+  // preset is built (see #53's decision log - flagged directly, not silently guessed at).
+  const plainStablecoinSymbols = ["USDC", "USDT", "DAI", "USDE", "GHO", "PYUSD", "LUSD", "FRAX", "TUSD"];
+  if (plainStablecoinSymbols.some((s) => upper === s || upper.startsWith(s))) {
+    return { beta: 0, subjectToDepeg: false, subjectToStablecoinDepeg: true };
+  }
+
+  // Everything else (BTC-correlated, governance/other tokens, Pendle PT wrappers,
+  // yield-bearing stablecoin wrappers) - held flat. Not part of this shock model's
+  // ETH/LST/stablecoin depeg story yet.
+  return { beta: 0, subjectToDepeg: false, subjectToStablecoinDepeg: false };
 }
 
 export function classifyForShock(reserve: AaveReserveConfig): AssetShockConfig {
