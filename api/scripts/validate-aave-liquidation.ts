@@ -76,10 +76,20 @@ async function main() {
     const collateralConfig = configByAsset.get(collateralAsset.toLowerCase());
     if (!collateralConfig) continue;
 
+    // Real, confirmed-live bug fix (see sync-validation-results.ts's matching comment):
+    // overriding only the collateral asset's oracle left the debt asset's REAL, unshocked
+    // price in effect for the actual call under a preset that shocks both - silently
+    // invalidating both the expected-value math and the HF prefilter for any position whose
+    // two legs are different assets.
+    const oracleOverridePrices: Record<string, bigint> = { [collateralAsset]: shockedPrices[collateralAsset]! };
+    if (debtAsset.toLowerCase() !== collateralAsset.toLowerCase() && shockedPrices[debtAsset] !== undefined) {
+      oracleOverridePrices[debtAsset] = shockedPrices[debtAsset]!;
+    }
+
     const result = await validateAaveLiquidation(publicClient, pool, {
       position,
       shockedPrices,
-      oracleOverridePrices: { [collateralAsset]: shockedPrices[collateralAsset]! },
+      oracleOverridePrices,
       collateralAsset,
       debtAsset,
       collateralLiquidationBonusRaw: collateralConfig.liquidationBonusRaw,

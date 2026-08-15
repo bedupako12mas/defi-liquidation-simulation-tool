@@ -1,5 +1,5 @@
 import type { Address as ViemAddress, PublicClient } from "viem";
-import { decodeFunctionResult, encodeFunctionData, parseAbi } from "viem";
+import { decodeAbiParameters, decodeFunctionResult, encodeFunctionData, parseAbi } from "viem";
 import { buildFixedReturnBytecode } from "./stateOverride.js";
 import { probeTokenSlots } from "./slotProbe.js";
 import { healthFactor } from "../engine/healthFactor.js";
@@ -46,6 +46,37 @@ const MIN_BASE_MAX_CLOSE_FACTOR_THRESHOLD = 200_000_000_000n; // $2,000 in 8-dec
 // confirmed via a bundle that read balance/allowance immediately before the call and got
 // back the correct funded values, proving the override itself wasn't the problem.
 const LIQUIDATOR_IDENTITY = MULTICALL3_ADDRESS;
+
+// Real Aave V3 custom-error selectors, confirmed live this session by computing
+// keccak256("HealthFactorNotBelowThreshold()") and matching it exactly against a real
+// revert this validator hit (aave-0xa189fea7...) - a legitimate real outcome (a race between
+// this script's own HF prefilter and the real on-chain state at call time - not pinned to
+// one shared block, see the block-number comment in validate-aave-liquidation.ts), not a
+// validator bug. Only entries actually confirmed this way are named here - an unrecognized
+// selector is reported as-is (below), never guessed at.
+const POOL_ERROR_NAMES: Record<string, string> = {
+  "0x930bb771": "HealthFactorNotBelowThreshold (position's real on-chain HF wasn't actually below 1 at call time)",
+};
+const ERROR_STRING_SELECTOR = "0x08c379a0"; // Error(string) - Aave's older require()-with-code reverts (e.g. "35")
+
+/** Best-effort revert decode: real Aave custom errors get a real name, `Error(string)`
+ *  reverts (Aave's numbered require() codes) get their string, anything else is reported as
+ *  the raw selector rather than silently swallowed - same discipline as fluidValidator.ts's
+ *  VAULT_ERROR_NAMES fallback. */
+function decodeAaveRevert(data: `0x${string}`): string {
+  const selector = data.slice(0, 10);
+  const named = POOL_ERROR_NAMES[selector];
+  if (named) return named;
+  if (selector === ERROR_STRING_SELECTOR) {
+    try {
+      const [reason] = decodeAbiParameters([{ type: "string" }], `0x${data.slice(10)}`);
+      return `Error("${reason}")`;
+    } catch {
+      // fall through to raw
+    }
+  }
+  return data;
+}
 
 export type AaveValidationResult =
   | { status: "not-liquidatable"; reason: "health-factor-above-one" }
@@ -254,7 +285,7 @@ export async function validateAaveLiquidation(
   const liquidationResult = results[1];
   if (!liquidationResult?.success) {
     const revertData = liquidationResult?.returnData ?? "0x";
-    return { status: "unexpected-revert", rawError: revertData };
+    return { status: "unexpected-revert", rawError: decodeAaveRevert(revertData) };
   }
 
   const debtBefore = decodeFunctionResult({ abi: ERC20_BALANCE_ABI, functionName: "balanceOf", data: results[0]!.returnData });
