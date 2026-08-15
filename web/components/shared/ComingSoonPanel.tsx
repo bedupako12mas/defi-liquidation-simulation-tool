@@ -1,8 +1,9 @@
 /**
- * The Milestone-2 placeholder. Rendered by CascadeDetailTab and ValidationTab while
- * `capabilities.fork` is false (see lib/hooks/useCapabilities.ts). Deliberately says what is
- * NOT built yet, rather than implying partial functionality - see
- * docs/FRONTEND_STRATEGY.md's milestone table.
+ * The Milestone-2 placeholder. Rendered by CascadeDetailTab while `capabilities.fork` is
+ * false (see lib/hooks/useCapabilities.ts) - ValidationTab moved off this component once
+ * #30/#36 made the RPC-tier validation checks real. Deliberately says what is NOT built
+ * yet, rather than implying partial functionality - see docs/FRONTEND_STRATEGY.md's
+ * milestone table.
  */
 
 export function ComingSoonPanel({

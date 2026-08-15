@@ -84,11 +84,12 @@ export function MethodologyTab() {
         <p className="preset-note">
           <strong>Bad debt is Level 2</strong>: a simplified aggregate approximation
           (<code>max(0, debt - collateral)</code>) at the shocked price - it does not replicate
-          the real contract&apos;s close-factor limits or per-asset seizure mechanics, and has
-          not yet been checked against a real liquidation call&apos;s actual output the way
-          health factor was. Closing that gap is the planned Validation-tier extension
-          (<code>eth_call</code> against the real liquidation function with a price override,
-          for both protocols) - not yet built.
+          the real contract&apos;s close-factor limits or per-asset seizure mechanics. The
+          Validation tab checks a bounded real sample of positions against the real contract
+          directly (<code>eth_call</code> against the real liquidation function with a price
+          override, for both protocols, no fork or mined transaction) - it does not replace
+          this tab&apos;s approximation everywhere, but it does give a real, checked answer for
+          how far off that approximation runs on real, live state.
         </p>
       </div>
 

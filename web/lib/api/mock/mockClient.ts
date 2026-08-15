@@ -9,6 +9,7 @@
 import fixtures from "./fixtures.generated.json";
 import type { MetaResponse, ShockPreset } from "../meta";
 import type { Protocol, PositionSnapshot, SweepPoint, KillPriceResult, MarketConcentrationEntry } from "../simulate";
+import type { ValidationProtocol, ValidationResult } from "../validation";
 
 type FixturesShape = {
   meta: MetaResponse;
@@ -68,6 +69,25 @@ export async function getMockKillPrices(presetId: string, protocol: Protocol): P
   const forPreset = data.killPrices[presetId];
   if (!forPreset) return [];
   return forPreset[protocol];
+}
+
+/** Illustrative, not literally live data (mock mode has no real chain to call) - but shaped
+ *  and proportioned to match a real sync run's actual outcome distribution (docs/decisions.md's
+ *  #30/#36 entry: 3 exact matches, 9 within-drift, 5 real HF-race reverts for Aave; 25/25
+ *  swept for the Fluid positions the disclosed oracle-hop coverage actually reaches), so mock
+ *  mode demonstrates the real range of honest outcomes, not just the happy path. */
+const MOCK_VALIDATION_RESULTS: ValidationResult[] = [
+  { protocol: "aave", positionId: "aave-0x1a2b3c4d5e6f70819293a4b5c6d7e8f901234567", presetId: "correlated", magnitudePct: "-30.00", status: "matched", expectedAmount: "120247427417", actualAmount: "120247427417", detail: null, createdAt: "2026-08-16T03:50:00Z" },
+  { protocol: "aave", positionId: "aave-0x2b3c4d5e6f70819293a4b5c6d7e8f9012345678a", presetId: "correlated", magnitudePct: "-30.00", status: "matched-within-drift", expectedAmount: "39779651744", actualAmount: "39779652184", detail: "0.0011% - consistent with unpinned-block interest accrual, not a logic error", createdAt: "2026-08-16T03:50:00Z" },
+  { protocol: "aave", positionId: "aave-0x3c4d5e6f70819293a4b5c6d7e8f9012345678ab1", presetId: "correlated", magnitudePct: "-30.00", status: "unexpected-revert", expectedAmount: null, actualAmount: null, detail: "HealthFactorNotBelowThreshold (position's real on-chain HF wasn't actually below 1 at call time)", createdAt: "2026-08-16T03:50:00Z" },
+  { protocol: "fluid", positionId: "fluid-0x009d7471fc3bd28fc45495d38978287fdf39416d-118", presetId: "lst-depeg", magnitudePct: "-3", status: "swept", expectedAmount: null, actualAmount: "21175223775", detail: "actualColAmt=20145631548358530415456", createdAt: "2026-08-16T03:50:00Z" },
+  { protocol: "fluid", positionId: "fluid-0x18b3aa2be6f10d0ea7f4491913a9e4dfa02c1b60-42", presetId: "lst-depeg", magnitudePct: "-5", status: "swept", expectedAmount: null, actualAmount: "253232000792", detail: "actualColAmt=249547975323302787906125", createdAt: "2026-08-16T03:50:00Z" },
+  { protocol: "fluid", positionId: "fluid-0x18b3aa2be6f10d0ea7f4491913a9e4dfa02c1b60-77", presetId: "lst-depeg", magnitudePct: "0", status: "not-applicable", expectedAmount: null, actualAmount: null, detail: "No yield-wrapper (Fluid-type) hop in this vault's oracle - LST-depeg scenario doesn't apply to this vault", createdAt: "2026-08-16T03:50:00Z" },
+];
+
+export async function getMockValidationResults(protocol?: ValidationProtocol): Promise<ValidationResult[]> {
+  if (!protocol) return MOCK_VALIDATION_RESULTS;
+  return MOCK_VALIDATION_RESULTS.filter((r) => r.protocol === protocol);
 }
 
 export async function getMockMarketConcentration(

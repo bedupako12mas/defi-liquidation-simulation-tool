@@ -1,27 +1,48 @@
 /**
- * Milestone 2 (mainnet-fork tier) API client - STUBBED, not implemented.
- *
- * `ValidationTab` (components/tabs/ValidationTab.tsx) renders `<ComingSoonPanel />` and never
- * imports or calls anything below while `capabilities.fork` is false (see
- * lib/hooks/useCapabilities.ts). This file exists now only so the module the real Milestone-2
- * work fills in already has a name and a location - FRONTEND_STRATEGY.md's "names reserved so
- * the plan is legible now" - not because there is a working validation flow today.
- *
- * When Milestone 2 starts: replace `notImplemented()` with a real client for whatever
- * fork-replay validation endpoint `api` exposes then (FRONTEND_STRATEGY.md's data-flow
- * section: "on-demand, single-scenario request... since fork jobs are serialized and
- * expensive"). Do not call this from a Milestone-1 component before that's true.
+ * `/api/validation-results` client - the real Aave/Fluid liquidation-validator results
+ * (api/src/validation/{aaveValidator,fluidValidator}.ts, #30), synced into the DB
+ * periodically by api/scripts/sync-validation-results.ts and served here as the latest
+ * stored rows (RPC-heavy state-override eth_calls are too slow for a request path - same
+ * "sync writes, route reads" split as meta.ts/simulate.ts's snapshot-backed routes).
+ * Same USE_MOCK swap point as every other client in this folder - see meta.ts's top comment.
  */
 
+import { API_BASE, USE_MOCK } from "./meta";
+
+export type ValidationProtocol = "aave" | "fluid";
+
+/** Real, disclosed statuses a validator run can produce - not all of them mean "failure".
+ *  "matched"/"matched-within-drift" and "swept" are the real positive confirmations;
+ *  "not-applicable"/"unable-to-validate" are disclosed scope limits, not silent gaps;
+ *  "mismatched"/"unexpected-revert" are the only two that mean something is actually wrong. */
+export type ValidationStatus =
+  | "matched"
+  | "matched-within-drift"
+  | "mismatched"
+  | "swept"
+  | "not-applicable"
+  | "unable-to-validate"
+  | "unexpected-revert";
+
 export interface ValidationResult {
-  // Placeholder shape - intentionally not fleshed out. Milestone 2 defines the real
-  // Stateless-vs-Validation comparison shape once the fork replay endpoint exists.
-  status: "not-implemented";
+  protocol: ValidationProtocol;
+  positionId: string;
+  presetId: string;
+  magnitudePct: string;
+  status: ValidationStatus;
+  expectedAmount: string | null;
+  actualAmount: string | null;
+  detail: string | null;
+  createdAt: string;
 }
 
-export async function fetchValidation(): Promise<never> {
-  throw new Error(
-    "fetchValidation() is a Milestone-2 stub (web/lib/api/validation.ts) - the fork tier " +
-      "is not built yet. See docs/FRONTEND_STRATEGY.md and capabilities.fork in /api/meta."
-  );
+export async function fetchValidationResults(protocol?: ValidationProtocol): Promise<ValidationResult[]> {
+  if (USE_MOCK) {
+    const { getMockValidationResults } = await import("./mock/mockClient");
+    return getMockValidationResults(protocol);
+  }
+  const params = protocol ? `?protocol=${encodeURIComponent(protocol)}` : "";
+  const res = await fetch(`${API_BASE}/api/validation-results${params}`);
+  if (!res.ok) throw new Error(`GET /api/validation-results failed: ${res.status}`);
+  return res.json();
 }

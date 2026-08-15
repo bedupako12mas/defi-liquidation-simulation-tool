@@ -82,7 +82,6 @@ function AppShell() {
           >
             {tab.label}
             {tab.id === "cascade" && capabilities && !capabilities.fork ? " (soon)" : ""}
-            {tab.id === "validation" && capabilities && !capabilities.fork ? " (soon)" : ""}
           </button>
         ))}
       </nav>

@@ -1,13 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { CascadeDetailTab } from "../CascadeDetailTab";
-import { ValidationTab } from "../ValidationTab";
 
 /**
- * These tabs must NOT claim to be real Milestone-2 functionality (the task this build came
- * from is explicit: "CascadeDetailTab and ValidationTab as <ComingSoonPanel /> stubs -
- * Milestone 2 isn't built yet, don't pretend it is"). These tests assert that honesty
- * mechanically, not just by convention - render either tab and it must say it isn't built.
+ * CascadeDetailTab must NOT claim to be real Milestone-2 functionality (mainnet-fork tier,
+ * #37/#38, not built yet - don't pretend it is). ValidationTab moved out of this file once
+ * #30/#36 made it real (see ValidationTab.test.tsx) - it is real, RPC-tier functionality
+ * now, not a Milestone-2 stub, and asserting it says "Not built yet" would itself be false.
  */
 describe("Milestone 2 tab stubs", () => {
   it("CascadeDetailTab renders ComingSoonPanel content and lists reserved component names", () => {
@@ -18,19 +17,9 @@ describe("Milestone 2 tab stubs", () => {
     expect(screen.getByText("components/cascade/CappedRateEffectChart.tsx")).toBeInTheDocument();
   });
 
-  it("ValidationTab renders ComingSoonPanel content", () => {
-    render(<ValidationTab />);
-    expect(screen.getByText(/Milestone 2/)).toBeInTheDocument();
-    expect(screen.getByText(/Not built yet/)).toBeInTheDocument();
-  });
-
-  it("neither stub renders a chart, table, or any element implying live data", () => {
-    const { container: cascadeContainer } = render(<CascadeDetailTab />);
-    expect(cascadeContainer.querySelector("table")).toBeNull();
-    expect(cascadeContainer.querySelector("svg")).toBeNull();
-
-    const { container: validationContainer } = render(<ValidationTab />);
-    expect(validationContainer.querySelector("table")).toBeNull();
-    expect(validationContainer.querySelector("svg")).toBeNull();
+  it("does not render a chart, table, or any element implying live data", () => {
+    const { container } = render(<CascadeDetailTab />);
+    expect(container.querySelector("table")).toBeNull();
+    expect(container.querySelector("svg")).toBeNull();
   });
 });
