@@ -73,8 +73,21 @@ jobs:
       # it, not racing them. Not part of `kubectl apply -k .` (see migrate-job.yaml's own
       # comment for why a Job's immutable pod template can't be re-applied every deploy the
       # same way) - deleted and reapplied explicitly instead.
+      #
+      # Real, confirmed-live finding: this cluster's single node has almost no spare
+      # capacity (920m allocatable, ~862m already used by everything else running - the
+      # same real constraint documented in deployment.yaml's "Recreate, not RollingUpdate"
+      # comment) - the migrate Job's pod sat Pending/unschedulable ("Insufficient cpu")
+      # because the still-running old api pod was using the headroom it needed. Scaling the
+      # Deployment to 0 first frees that headroom - not a separate extra downtime window,
+      # just front-loading the downtime this deploy was already going to cause (Recreate
+      # strategy tears the old pod down before the new one comes up either way); the next
+      # step's `kubectl apply -k .` brings it back up at the overlay's declared replica
+      # count once the migration has already succeeded.
       - name: Run migration
         run: |
+          kubectl scale deployment/api --replicas=0 -n liquidation-sim-staging
+          kubectl wait --for=delete pod -l app.kubernetes.io/name=api,app.kubernetes.io/component!=migration -n liquidation-sim-staging --timeout=60s || true
           kubectl delete job migrate -n liquidation-sim-staging --ignore-not-found
           sed "s#api:unset#$DIGEST#" k8s/base/migrate-job.yaml | kubectl apply -n liquidation-sim-staging -f -
           if ! kubectl wait --for=condition=complete job/migrate -n liquidation-sim-staging --timeout=120s; then
@@ -124,9 +137,13 @@ jobs:
       - name: Authenticate to DOKS
         run: doctl kubernetes cluster kubeconfig save "${{ secrets.DOKS_CLUSTER_NAME_PROD }}"
 
-      # See deploy-staging's identical step - same reasoning, prod's own namespace/DB.
+      # See deploy-staging's identical step (including the scale-to-0 comment - same real,
+      # confirmed-live single-node capacity constraint) - same reasoning, prod's own
+      # namespace/DB.
       - name: Run migration
         run: |
+          kubectl scale deployment/api --replicas=0 -n liquidation-sim-prod
+          kubectl wait --for=delete pod -l app.kubernetes.io/name=api,app.kubernetes.io/component!=migration -n liquidation-sim-prod --timeout=60s || true
           kubectl delete job migrate -n liquidation-sim-prod --ignore-not-found
           sed "s#api:unset#$DIGEST#" k8s/base/migrate-job.yaml | kubectl apply -n liquidation-sim-prod -f -
           if ! kubectl wait --for=condition=complete job/migrate -n liquidation-sim-prod --timeout=120s; then
