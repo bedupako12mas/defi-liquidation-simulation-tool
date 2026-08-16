@@ -22,7 +22,7 @@
     "sync:capped-rate-breach": "tsx scripts/sync-capped-rate-breach.ts"
   },
   "dependencies": {
-    "@fastify/cors": "^10.0.1",
+    "@fastify/cors": "^11.3.0",
     "@fastify/rate-limit": "^10.1.1",
     "fastify": "^5.1.0",
     "kysely": "^0.29.5",
