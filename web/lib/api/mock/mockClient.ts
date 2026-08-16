@@ -11,6 +11,7 @@ import type { MetaResponse, ShockPreset } from "../meta";
 import type { Protocol, PositionSnapshot, SweepPoint, KillPriceResult, MarketConcentrationEntry } from "../simulate";
 import type { ValidationProtocol, ValidationResult } from "../validation";
 import type { ProfitabilityProtocol, LiquidationProfitability } from "../profitability";
+import type { ChainedProtocol, ChainedLiquidationResult } from "../chainedLiquidation";
 
 type FixturesShape = {
   meta: MetaResponse;
@@ -107,6 +108,23 @@ const MOCK_LIQUIDATION_PROFITABILITY: LiquidationProfitability[] = [
 export async function getMockLiquidationProfitability(protocol?: ProfitabilityProtocol): Promise<LiquidationProfitability[]> {
   if (!protocol) return MOCK_LIQUIDATION_PROFITABILITY;
   return MOCK_LIQUIDATION_PROFITABILITY.filter((r) => r.protocol === protocol);
+}
+
+/** These two rows are the ACTUAL real result of a real sync-chained-liquidation.ts run
+ *  (#37, docs/decisions.md) - not illustrative. 5 real shared-reserve-pair groups were found
+ *  among currently-liquidatable Aave positions; 3 had no candidate A that simulated
+ *  successfully (honestly skipped, not forced); these 2 real (A, B) pairs both produced a
+ *  real, small, nonzero debtRepaidDiff - a genuine fork-only-observable effect (real reserve
+ *  index drift between A's mined block and B's re-check) that an isolated eth_call cannot
+ *  detect by construction. */
+const MOCK_CHAINED_LIQUIDATION: ChainedLiquidationResult[] = [
+  { protocol: "aave", presetId: "correlated", magnitudePct: "-30", positionAId: "aave-0xa9944849522b2cb9185f21a83cd32c05602b1f50", positionBId: "aave-0x20a21207fb4b11cd2b3d0dfc779d622cf13e0a5e", debtAssetSymbol: "USDT", debtAssetDecimals: 6, positionATxStatus: "success", isolatedStatus: "liquidated", isolatedDebtRepaid: "4415241334", chainedStatus: "liquidated", chainedDebtRepaid: "4415241367", debtRepaidDiff: "33", detail: null, createdAt: "2026-08-16T09:10:30.110Z" },
+  { protocol: "aave", presetId: "correlated", magnitudePct: "-30", positionAId: "aave-0x712e9696a08e525aea0ca4dde4efc7e77ef9ae24", positionBId: "aave-0x6e24877c8236baa41dd4faac0df6d1cb4937ea3c", debtAssetSymbol: "USDC", debtAssetDecimals: 6, positionATxStatus: "success", isolatedStatus: "liquidated", isolatedDebtRepaid: "73006407666", chainedStatus: "liquidated", chainedDebtRepaid: "73006408172", debtRepaidDiff: "506", detail: null, createdAt: "2026-08-16T09:10:30.110Z" },
+];
+
+export async function getMockChainedLiquidation(protocol?: ChainedProtocol): Promise<ChainedLiquidationResult[]> {
+  if (!protocol) return MOCK_CHAINED_LIQUIDATION;
+  return MOCK_CHAINED_LIQUIDATION.filter((r) => r.protocol === protocol);
 }
 
 export async function getMockMarketConcentration(

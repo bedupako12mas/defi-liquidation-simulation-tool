@@ -10,6 +10,7 @@ import { registerPositionsRoute } from "./routes/positions.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.js";
 import { registerValidationResultsRoutes } from "./routes/validationResults.js";
 import { registerLiquidationProfitabilityRoutes } from "./routes/liquidationProfitability.js";
+import { registerChainedLiquidationRoutes } from "./routes/chainedLiquidation.js";
 
 const app = Fastify({ logger: true });
 
@@ -58,6 +59,7 @@ registerPositionsRoute(app, { db, client: publicClient });
 registerAnalyticsRoutes(app, { db, client: publicClient });
 registerValidationResultsRoutes(app, { db });
 registerLiquidationProfitabilityRoutes(app, { db });
+registerChainedLiquidationRoutes(app, { db });
 
 app.get("/health", async () => ({ ok: true }));
 

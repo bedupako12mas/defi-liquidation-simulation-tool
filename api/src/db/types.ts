@@ -107,6 +107,31 @@ export interface LiquidationProfitabilityTable {
   created_at: ColumnType<Date, string | undefined, never>;
 }
 
+/** Written by scripts/sync-chained-liquidation.ts (#37/#38) - one row per real (A, B) pair
+ *  actually tested against a real, ephemeral anvil fork: A's real liquidationCall() is
+ *  mined, then B's validateAaveLiquidation is compared before vs. after on the same fork.
+ *  The one tier that genuinely needs persistent, mutable EVM state - see anvilFork.ts. */
+export interface ChainedLiquidationResultsTable {
+  id: Generated<number>;
+  protocol: "aave" | "fluid";
+  preset_id: string;
+  magnitude_pct: Numeric;
+  position_a_id: string;
+  position_b_id: string;
+  debt_asset_symbol: string | null;
+  debt_asset_decimals: number | null;
+  /** "success" | "reverted" - A's own real, mined liquidationCall() outcome. */
+  position_a_tx_status: string;
+  isolated_status: string | null;
+  isolated_debt_repaid: ColumnType<string | null, string | bigint | null | undefined, string | null>;
+  chained_status: string | null;
+  chained_debt_repaid: ColumnType<string | null, string | bigint | null | undefined, string | null>;
+  /** Signed: chained - isolated, debt asset's native decimals - the real, fork-only effect. */
+  debt_repaid_diff: ColumnType<string | null, string | bigint | null | undefined, string | null>;
+  detail: string | null;
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
 export interface DB {
   snapshots: SnapshotsTable;
   indexer_progress: IndexerProgressTable;
@@ -115,4 +140,5 @@ export interface DB {
   protocol_params: ProtocolParamsTable;
   validation_results: ValidationResultsTable;
   liquidation_profitability: LiquidationProfitabilityTable;
+  chained_liquidation_results: ChainedLiquidationResultsTable;
 }
