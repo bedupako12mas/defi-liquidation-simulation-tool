@@ -44,10 +44,11 @@ const LIMITATIONS = [
     "empirically checked against Aave's own on-chain getUserAccountData() (matched to " +
     "within 10 bps on real positions). Bad debt is a simplified aggregate approximation " +
     "(max(0, debt - collateral)) - it does not replicate the real contract's close-factor " +
-    "limits or per-asset seizure mechanics, and has not yet been checked against a real " +
-    "liquidation call's actual output the way health factor was. Closing that gap is a " +
-    "planned Validation-tier extension (eth_call against the real liquidation function with " +
-    "a price override), not yet built.",
+    "limits or per-asset seizure mechanics everywhere. The Validation tab checks a bounded " +
+    "real sample of positions against the real contract directly (eth_call against the real " +
+    "liquidation function with a price override, both protocols, no fork or mined " +
+    "transaction) - it does not replace this approximation everywhere, but gives a real, " +
+    "checked answer for how far off it runs on real, live state.",
   "The undercollateralization-frontier figure (LTV past which any liquidation under this " +
     "protocol's own fixed-bonus mechanism is guaranteed to worsen a position, not improve " +
     "it) is a direct algebraic consequence of each protocol's own published liquidation " +

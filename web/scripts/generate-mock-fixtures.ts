@@ -296,6 +296,7 @@ function buildMeta() {
   return {
     mode: "demo" as const,
     pinnedBlock: null,
+    fluidPinnedBlock: null,
     presets: Object.values(SHOCK_PRESETS),
     ucFrontier: ucFrontierTable(),
     limitations: LIMITATIONS,

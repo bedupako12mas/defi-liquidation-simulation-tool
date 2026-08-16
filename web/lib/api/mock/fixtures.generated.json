@@ -1,9 +1,10 @@
 {
-  "generatedAt": "2026-08-15T19:48:07.471Z",
+  "generatedAt": "2026-08-16T04:50:24.717Z",
   "generatedBy": "web/scripts/generate-mock-fixtures.ts (real api/src/engine output, frozen)",
   "meta": {
     "mode": "demo",
     "pinnedBlock": null,
+    "fluidPinnedBlock": null,
     "presets": [
       {
         "id": "correlated",

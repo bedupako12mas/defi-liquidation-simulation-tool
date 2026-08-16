@@ -56,6 +56,9 @@ export interface Capabilities {
 export interface MetaResponse {
   mode: "demo";
   pinnedBlock: string | null;
+  /** Fluid T1's own real, separately-indexed snapshot block - Fluid has its own indexer
+   *  cadence, distinct from Aave's, so the two aren't the same block (api/src/routes/meta.ts). */
+  fluidPinnedBlock: string | null;
   presets: ShockPreset[];
   ucFrontier: UcFrontierRow[];
   limitations: string[];

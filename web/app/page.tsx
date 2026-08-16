@@ -61,13 +61,19 @@ function AppShell() {
         </div>
       ) : (
         <div className="banner banner-info">
-          <strong>LIVE DATA.</strong> Real Aave V3 positions from the connected backend
+          <strong>LIVE DATA.</strong> Real Aave V3 positions
           {meta?.pinnedBlock ? (
             <>
-              , pinned at block <code>{meta.pinnedBlock}</code>
+              {" "}(pinned at block <code>{meta.pinnedBlock}</code>)
+            </>
+          ) : null}{" "}
+          and real Fluid T1 positions across all 101 real vaults
+          {meta?.fluidPinnedBlock ? (
+            <>
+              {" "}(pinned at block <code>{meta.fluidPinnedBlock}</code>)
             </>
           ) : null}
-          . Fluid T1 is not wired up yet - see the Methodology tab for the full,
+          , both from the connected backend - see the Methodology tab for the full,
           current list of limitations.
         </div>
       )}
