@@ -52,7 +52,7 @@ jobs:
       contents: read
       actions: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check ${{ matrix.path }} exists
         id: exists
@@ -159,7 +159,7 @@ jobs:
       contents: read
       security-events: write # only this job gets it, only to upload the SARIF scan result
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check api exists
         id: exists
@@ -215,7 +215,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # full history, deliberately - see comment above
 
