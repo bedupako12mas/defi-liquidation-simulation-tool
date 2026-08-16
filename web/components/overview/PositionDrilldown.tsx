@@ -18,6 +18,7 @@ import {
   type Protocol,
 } from "@/lib/api/simulate";
 import type { ShockPreset } from "@/lib/api/meta";
+import { InfoTooltip } from "@/components/shared/InfoTooltip";
 
 const MAGNITUDE_MIN = 0;
 const MAGNITUDE_MAX = -80;
@@ -266,26 +267,58 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
           </div>
 
           <p className="explainer">
-            A position becomes <strong>Liquidatable</strong> once its LTV crosses the
-            liquidation <strong>Threshold</strong> (first tick below) - the protocol&apos;s
-            own eligibility bar. It only becomes <strong>Toxic</strong> past the{" "}
-            <strong>UC Frontier</strong> (second tick) - a much higher bar past which any
-            further liquidation under a fixed bonus mechanically worsens the position&apos;s
-            LTV, not just an already-bad state. Toxic is always a subset of Liquidatable, not
-            a separate condition. Percentages are of the sampled book (count-based, not
-            dollar-based) - the fair way to compare Aave&apos;s and Fluid&apos;s very
-            different sample sizes without either being distorted by a single large
-            position.
+            <span>
+              In plain terms: a position crosses into <strong>Liquidatable</strong> once it
+              passes one line, and into <strong>Toxic</strong> only once it passes a second,
+              much higher line - past which liquidating it can no longer make it healthier,
+              only less bad.
+            </span>
+            <InfoTooltip label="Technical definition of Liquidatable, Toxic, and these percentages">
+              A position becomes <strong>Liquidatable</strong> once its LTV crosses the
+              liquidation <strong>Threshold</strong> (first tick below) - the protocol&apos;s
+              own eligibility bar. It only becomes <strong>Toxic</strong> past the{" "}
+              <strong>UC Frontier</strong> (second tick) - a much higher bar past which any
+              further liquidation under a fixed bonus mechanically worsens the position&apos;s
+              LTV, not just an already-bad state. Toxic is always a subset of Liquidatable, not
+              a separate condition. Percentages are of the sampled book (count-based, not
+              dollar-based) - the fair way to compare Aave&apos;s and Fluid&apos;s very
+              different sample sizes without either being distorted by a single large
+              position.
+            </InfoTooltip>
           </p>
 
           <div className="three-state-grid" style={{ marginTop: "0.5rem" }}>
             <div className="three-state-cell">
               <div className="count">{concentrationPct === null ? "—" : `${concentrationPct.toFixed(1)}%`}</div>
-              <div className="label">Largest at-risk position&apos;s share of at-risk collateral</div>
+              <div className="label">
+                <span>Largest at-risk position&apos;s share of at-risk collateral</span>
+                <InfoTooltip label="What concentration means">
+                  <strong>Plain language:</strong> how much of the at-risk total is really just
+                  one whale position, rather than broad-based risk.
+                  <br />
+                  <br />
+                  <strong>Technical:</strong> the single largest at-risk position&apos;s share of
+                  all at-risk collateral, at this shock. High concentration means a dollar swing
+                  is a single-position artifact, not a broad signal; low, stable concentration
+                  means it is.
+                </InfoTooltip>
+              </div>
             </div>
             <div className="three-state-cell">
               <div className="count">{severityMedian === null ? "—" : `${(severityMedian * 100).toFixed(0)}%`}</div>
-              <div className="label">Median debt/collateral ratio, underwater positions only</div>
+              <div className="label">
+                <span>Median debt/collateral ratio, underwater positions only</span>
+                <InfoTooltip label="What bad-debt severity means">
+                  <strong>Plain language:</strong> how much of a position&apos;s debt could be
+                  wiped out if a liquidator gets it slightly wrong, typically.
+                  <br />
+                  <br />
+                  <strong>Technical:</strong> the median debt/collateral ratio among only the
+                  positions that are actually underwater, not the summed dollar total - separates
+                  &ldquo;many positions barely underwater&rdquo; from &ldquo;one position
+                  catastrophically underwater,&rdquo; which a single summed total conflates.
+                </InfoTooltip>
+              </div>
             </div>
             <div className="three-state-cell">
               <div className="count">
@@ -294,7 +327,20 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
                   <span className="count-pct"> ({neverCrossesCount} of {killPrices.length} never cross)</span>
                 )}
               </div>
-              <div className="label">Median shock magnitude at which a position first crosses its threshold</div>
+              <div className="label">
+                <span>Median shock magnitude at which a position first crosses its threshold</span>
+                <InfoTooltip label="What headroom (kill-price) means">
+                  <strong>Plain language:</strong> how big a price drop it typically takes to
+                  push a position into trouble.
+                  <br />
+                  <br />
+                  <strong>Technical:</strong> per position, the shock magnitude at which it first
+                  crosses its own threshold, shown as a distribution (median) rather than a
+                  single swept curve - naturally robust to sample size and to any single outlier
+                  position, since a median isn&apos;t moved by one extreme value the way a sum
+                  is.
+                </InfoTooltip>
+              </div>
             </div>
           </div>
 
@@ -330,8 +376,38 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
                   <th>Position</th>
                   <th>Collateral (USD)</th>
                   <th>Debt (USD)</th>
-                  <th>Health factor</th>
-                  <th>LTV vs. Threshold vs. UC frontier</th>
+                  <th>
+                    Health factor
+                    <InfoTooltip label="What health factor means">
+                      <strong>Plain language:</strong> a single number for how safe a position
+                      is. Above 1 is safe; below 1 means it can be liquidated.
+                      <br />
+                      <br />
+                      <strong>Technical:</strong> collateral value &times; liquidation threshold,
+                      divided by debt value. Real liquidation-formula math, empirically checked
+                      against Aave&apos;s own on-chain <code>getUserAccountData()</code> to
+                      within 10 bps on real positions; the same formula is reused unchanged for
+                      Fluid T1&apos;s single-collateral-leg positions.
+                    </InfoTooltip>
+                  </th>
+                  <th>
+                    LTV vs. Threshold vs. UC frontier
+                    <InfoTooltip label="What LTV, threshold, and UC frontier mean">
+                      <strong>Plain language:</strong> where the position&apos;s current
+                      borrowed-against-collateral ratio (LTV) sits relative to two lines - the
+                      one where liquidation becomes possible, and the much higher one past which
+                      liquidating it can no longer make it healthier.
+                      <br />
+                      <br />
+                      <strong>Technical:</strong> <strong>LTV</strong> is current debt divided by
+                      current collateral value. <strong>Threshold</strong> (effective liquidation
+                      threshold) is the protocol&apos;s own eligibility bar - crossing it flips
+                      the position to Liquidatable/Eligible. The <strong>UC frontier</strong>{" "}
+                      (undercollateralization frontier, LTV<sub>UC</sub> = 1/(1+i) for incentive
+                      i) is a much higher bar past which any liquidation under a fixed bonus is
+                      guaranteed to make LTV worse, not better - flipping the position to Toxic.
+                    </InfoTooltip>
+                  </th>
                   <th>State</th>
                   <th>Bad debt (USD)</th>
                 </tr>

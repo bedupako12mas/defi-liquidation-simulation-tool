@@ -1,26 +1,30 @@
 "use client";
 
 /**
- * The real Validation tier (#30/#36) - not a fork-replay tier (that's Milestone 2, still a
- * ComingSoonPanel stub in CascadeDetailTab). This is a genuinely real, RPC-tier check: for
- * a bounded real sample of positions, api/src/validation/{aaveValidator,fluidValidator}.ts
- * override each protocol's real on-chain oracle price via a state-override eth_call and
- * check the REAL liquidationCall()/liquidate() output - no fork, no mined tx, nothing
- * simulated beyond a read-only eth_call. Results are computed periodically by
- * scripts/sync-validation-results.ts (real, RPC-heavy state-override calls - too slow for a
- * request path) and served here as the latest stored rows, same "sync writes, route reads"
- * split as every other real-data tab in this app.
+ * The real Validation tier (#30/#36) plus gas-vs-bonus profitability (#43) - not a
+ * fork-replay tier (that's Milestone 2, still a ComingSoonPanel stub in CascadeDetailTab).
+ * Both sections are genuinely real, RPC-tier checks: for a bounded real sample of
+ * positions, api/src/validation/{aaveValidator,fluidValidator}.ts override each protocol's
+ * real on-chain oracle price via a state-override eth_call and check the REAL
+ * liquidationCall()/liquidate() output (Validation) or a real eth_estimateGas against the
+ * real bonus a liquidator would receive (Profitability) - no fork, no mined tx, nothing
+ * simulated beyond read-only calls. Both are computed periodically by
+ * scripts/sync-{validation-results,liquidation-profitability}.ts (real, RPC-heavy calls -
+ * too slow for a request path) and served here as the latest stored rows, same
+ * "sync writes, route reads" split as every other real-data tab in this app.
  *
- * Every real status a validator run can produce is shown here as a first-class result, not
- * just the happy path - "not-applicable"/"unable-to-validate" are disclosed scope limits
- * (see the two validators' own doc comments), not hidden failures, and get the same visible
- * treatment as a genuine match or a genuine problem.
+ * Every real status either check can produce is shown as a first-class result, not just the
+ * happy path - "not-applicable"/"unable-to-validate"/"unable-to-estimate-gas" are disclosed
+ * scope limits (see the validators' own doc comments), not hidden failures.
  */
 
 import { useEffect, useState } from "react";
 import { fetchValidationResults, type ValidationResult, type ValidationStatus } from "@/lib/api/validation";
+import { fetchLiquidationProfitability, type LiquidationProfitability, type ProfitabilityStatus } from "@/lib/api/profitability";
+import { formatTokenAmount, formatUsd8, formatGas, formatMagnitudePct } from "@/lib/format";
+import { InfoTooltip } from "@/components/shared/InfoTooltip";
 
-const STATUS_TAG: Record<ValidationStatus, { label: string; className: string }> = {
+const VALIDATION_STATUS_TAG: Record<ValidationStatus, { label: string; className: string }> = {
   matched: { label: "Matched", className: "tag-healthy" },
   "matched-within-drift": { label: "Matched (within drift)", className: "tag-healthy" },
   swept: { label: "Swept", className: "tag-healthy" },
@@ -30,8 +34,15 @@ const STATUS_TAG: Record<ValidationStatus, { label: string; className: string }>
   "unable-to-validate": { label: "Unable to validate", className: "tag-na" },
 };
 
-function StatusTag({ status }: { status: ValidationStatus }) {
-  const tag = STATUS_TAG[status];
+const PROFITABILITY_STATUS_TAG: Record<ProfitabilityStatus, { label: string; className: string }> = {
+  profitable: { label: "Profitable", className: "tag-healthy" },
+  unprofitable: { label: "Unprofitable", className: "tag-toxic" },
+  "unable-to-validate": { label: "Unable to validate", className: "tag-na" },
+  "unable-to-estimate-gas": { label: "Unable to estimate gas", className: "tag-na" },
+};
+
+function StatusTag<S extends string>({ status, map }: { status: S; map: Record<S, { label: string; className: string }> }) {
+  const tag = map[status];
   return <span className={`tag ${tag.className}`}>{tag.label}</span>;
 }
 
@@ -45,25 +56,17 @@ function shortenPositionId(id: string): string {
   return id.replace(addr, shortAddr);
 }
 
-function formatAmount(raw: string | null): string {
-  if (raw === null) return "—";
-  // Raw on-chain integer units (varies by token decimals per position) - shown as-is with
-  // thousands separators rather than guessing a decimals value this table doesn't have,
-  // which would risk silently misrepresenting the real magnitude.
-  return BigInt(raw).toLocaleString("en-US");
-}
-
-function summarize(rows: ValidationResult[]): string {
-  const counts = new Map<ValidationStatus, number>();
+function summarize<S extends string>(rows: { status: S }[], map: Record<S, { label: string; className: string }>): string {
+  const counts = new Map<S, number>();
   for (const r of rows) counts.set(r.status, (counts.get(r.status) ?? 0) + 1);
-  return [...counts.entries()].map(([status, n]) => `${n} ${STATUS_TAG[status].label.toLowerCase()}`).join(", ");
+  return [...counts.entries()].map(([status, n]) => `${n} ${map[status].label.toLowerCase()}`).join(", ");
 }
 
-function AaveTable({ rows }: { rows: ValidationResult[] }) {
+function AaveValidationTable({ rows }: { rows: ValidationResult[] }) {
   if (rows.length === 0) return <p className="loading">No Aave validation results yet.</p>;
   return (
     <>
-      <p className="preset-note" style={{ marginTop: 0 }}>{rows.length} real positions checked - {summarize(rows)}.</p>
+      <p className="preset-note" style={{ marginTop: 0 }}>{rows.length} real positions checked - {summarize(rows, VALIDATION_STATUS_TAG)}.</p>
       <div style={{ overflowX: "auto" }}>
         <table>
           <thead>
@@ -80,10 +83,10 @@ function AaveTable({ rows }: { rows: ValidationResult[] }) {
             {rows.map((r) => (
               <tr key={`${r.protocol}-${r.positionId}-${r.presetId}`}>
                 <td><code>{shortenPositionId(r.positionId)}</code></td>
-                <td className="num">{r.presetId} @ {r.magnitudePct}%</td>
-                <td><StatusTag status={r.status} /></td>
-                <td className="num">{formatAmount(r.expectedAmount)}</td>
-                <td className="num">{formatAmount(r.actualAmount)}</td>
+                <td className="num">{r.presetId} @ {formatMagnitudePct(r.magnitudePct)}</td>
+                <td><StatusTag status={r.status} map={VALIDATION_STATUS_TAG} /></td>
+                <td className="num">{formatTokenAmount(r.expectedAmount, r.debtAssetDecimals, r.debtAssetSymbol)}</td>
+                <td className="num">{formatTokenAmount(r.actualAmount, r.debtAssetDecimals, r.debtAssetSymbol)}</td>
                 <td className="provenance">{r.detail ?? "—"}</td>
               </tr>
             ))}
@@ -94,11 +97,11 @@ function AaveTable({ rows }: { rows: ValidationResult[] }) {
   );
 }
 
-function FluidTable({ rows }: { rows: ValidationResult[] }) {
+function FluidValidationTable({ rows }: { rows: ValidationResult[] }) {
   if (rows.length === 0) return <p className="loading">No Fluid validation results yet.</p>;
   return (
     <>
-      <p className="preset-note" style={{ marginTop: 0 }}>{rows.length} real positions checked - {summarize(rows)}.</p>
+      <p className="preset-note" style={{ marginTop: 0 }}>{rows.length} real positions checked - {summarize(rows, VALIDATION_STATUS_TAG)}.</p>
       <div style={{ overflowX: "auto" }}>
         <table>
           <thead>
@@ -107,6 +110,7 @@ function FluidTable({ rows }: { rows: ValidationResult[] }) {
               <th>Shock</th>
               <th>Status</th>
               <th>Actual debt swept</th>
+              <th>Actual collateral seized</th>
               <th>Detail</th>
             </tr>
           </thead>
@@ -114,9 +118,51 @@ function FluidTable({ rows }: { rows: ValidationResult[] }) {
             {rows.map((r) => (
               <tr key={`${r.protocol}-${r.positionId}-${r.presetId}`}>
                 <td><code>{shortenPositionId(r.positionId)}</code></td>
-                <td className="num">{r.presetId} @ {r.magnitudePct}%</td>
-                <td><StatusTag status={r.status} /></td>
-                <td className="num">{formatAmount(r.actualAmount)}</td>
+                <td className="num">{r.presetId} @ {formatMagnitudePct(r.magnitudePct)}</td>
+                <td><StatusTag status={r.status} map={VALIDATION_STATUS_TAG} /></td>
+                <td className="num">{formatTokenAmount(r.actualAmount, r.debtAssetDecimals, r.debtAssetSymbol)}</td>
+                <td className="num">{formatTokenAmount(r.actualCollateralAmount, r.collateralAssetDecimals, r.collateralAssetSymbol)}</td>
+                <td className="provenance">{r.detail ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function ProfitabilityTable({ rows }: { rows: LiquidationProfitability[] }) {
+  if (rows.length === 0) return <p className="loading">No profitability results yet.</p>;
+  return (
+    <>
+      <p className="preset-note" style={{ marginTop: 0 }}>{rows.length} real (position, shock magnitude) pairs checked - {summarize(rows, PROFITABILITY_STATUS_TAG)}.</p>
+      <div style={{ overflowX: "auto" }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Position</th>
+              <th>Shock</th>
+              <th>Status</th>
+              <th>Gas used</th>
+              <th>Gas cost</th>
+              <th>Debt cleared</th>
+              <th>Bonus received</th>
+              <th>Net profit</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={`${r.protocol}-${r.positionId}-${r.presetId}-${r.magnitudePct}-${i}`}>
+                <td><code>{shortenPositionId(r.positionId)}</code></td>
+                <td className="num">{r.presetId} @ {formatMagnitudePct(r.magnitudePct)}</td>
+                <td><StatusTag status={r.status} map={PROFITABILITY_STATUS_TAG} /></td>
+                <td className="num">{formatGas(r.gasUsed)}</td>
+                <td className="num">{formatUsd8(r.gasCostUsd8)}</td>
+                <td className="num">{formatUsd8(r.debtClearedUsd8)}</td>
+                <td className="num">{formatUsd8(r.bonusValueUsd8)}</td>
+                <td className="num">{formatUsd8(r.netProfitUsd8)}</td>
                 <td className="provenance">{r.detail ?? "—"}</td>
               </tr>
             ))}
@@ -129,7 +175,9 @@ function FluidTable({ rows }: { rows: ValidationResult[] }) {
 
 export function ValidationTab() {
   const [results, setResults] = useState<ValidationResult[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [resultsError, setResultsError] = useState<string | null>(null);
+  const [profitability, setProfitability] = useState<LiquidationProfitability[] | null>(null);
+  const [profitabilityError, setProfitabilityError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,7 +186,14 @@ export function ValidationTab() {
         if (!cancelled) setResults(rows);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) setResultsError(err instanceof Error ? err.message : String(err));
+      });
+    fetchLiquidationProfitability()
+      .then((rows) => {
+        if (!cancelled) setProfitability(rows);
+      })
+      .catch((err) => {
+        if (!cancelled) setProfitabilityError(err instanceof Error ? err.message : String(err));
       });
     return () => {
       cancelled = true;
@@ -147,6 +202,8 @@ export function ValidationTab() {
 
   const aaveRows = results?.filter((r) => r.protocol === "aave") ?? [];
   const fluidRows = results?.filter((r) => r.protocol === "fluid") ?? [];
+  const aaveProfitability = profitability?.filter((r) => r.protocol === "aave") ?? [];
+  const fluidProfitability = profitability?.filter((r) => r.protocol === "fluid") ?? [];
 
   return (
     <div>
@@ -173,20 +230,53 @@ export function ValidationTab() {
           &ldquo;Not applicable&rdquo; and &ldquo;unable to validate&rdquo; are disclosed scope
           limits (e.g. a vault whose oracle isn&apos;t the supported hop pattern, or an{" "}
           <code>eth_call</code> too large for this deploy&apos;s RPC tier), not hidden
-          failures - they&apos;re shown as real outcomes, not filtered out.
+          failures - they&apos;re shown as real outcomes, not filtered out. All amounts below
+          are the real asset&apos;s own units (e.g. USDC, wstETH), decimal-adjusted and
+          labeled - never a bare, unlabeled number.
         </p>
       </div>
 
-      {error && <div className="banner">Error talking to the API: {error}.</div>}
+      {resultsError && <div className="banner">Error talking to the API: {resultsError}.</div>}
 
       <div className="card">
-        <h2>Aave V3</h2>
-        {results === null && !error ? <p className="loading">Loading...</p> : <AaveTable rows={aaveRows} />}
+        <h2>Aave V3 - correctness check</h2>
+        {results === null && !resultsError ? <p className="loading">Loading...</p> : <AaveValidationTable rows={aaveRows} />}
       </div>
 
       <div className="card">
-        <h2>Fluid T1</h2>
-        {results === null && !error ? <p className="loading">Loading...</p> : <FluidTable rows={fluidRows} />}
+        <h2>Fluid T1 - correctness check</h2>
+        {results === null && !resultsError ? <p className="loading">Loading...</p> : <FluidValidationTable rows={fluidRows} />}
+      </div>
+
+      <div className="card">
+        <h2>
+          Gas vs. bonus - is it actually worth a liquidator&apos;s time?
+          <InfoTooltip label="What this section checks">
+            <strong>Plain language:</strong> a liquidation only really happens if a real
+            liquidator profits from it after paying real gas. This checks that directly - a
+            real gas estimate against a real bonus, at real (if currently very low) gas
+            prices.
+            <br />
+            <br />
+            <strong>Technical:</strong> real <code>eth_estimateGas</code> against both
+            protocols&apos; actual deployed contracts, converted to USD via the real current
+            gas price and real ETH/USD, compared against the real bonus a liquidator would
+            receive. Both protocols are tested under the SAME &ldquo;correlated&rdquo; shock
+            scenario specifically so the comparison is fair - see the Glossary
+            (Methodology tab) for why that matters.
+          </InfoTooltip>
+        </h2>
+        <p className="preset-note" style={{ marginTop: 0 }}>
+          Each row is one real (position, shock magnitude) attempt - the magnitude ladder
+          stops at the first magnitude where the position is genuinely profitable, so a
+          position with several rows shows its real path from unprofitable to profitable as
+          the shock deepens.
+        </p>
+        {profitabilityError && <div className="banner">Error talking to the API: {profitabilityError}.</div>}
+        <h3 style={{ marginTop: "1.25rem" }}>Aave V3</h3>
+        {profitability === null && !profitabilityError ? <p className="loading">Loading...</p> : <ProfitabilityTable rows={aaveProfitability} />}
+        <h3 style={{ marginTop: "1.75rem" }}>Fluid T1</h3>
+        {profitability === null && !profitabilityError ? <p className="loading">Loading...</p> : <ProfitabilityTable rows={fluidProfitability} />}
       </div>
     </div>
   );

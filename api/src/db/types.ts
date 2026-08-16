@@ -69,6 +69,16 @@ export interface ValidationResultsTable {
   status: string;
   expected_amount: ColumnType<string | null, string | bigint | null | undefined, string | null>;
   actual_amount: ColumnType<string | null, string | bigint | null | undefined, string | null>;
+  /** Real on-chain symbol/decimals for the asset expected_amount/actual_amount are
+   *  denominated in (the debt asset - both protocols) - added so the raw integer amounts
+   *  above are actually labeled, not bare numbers with no unit. */
+  debt_asset_symbol: string | null;
+  debt_asset_decimals: number | null;
+  /** Only populated for Fluid rows (the collateral seized) - Aave's equivalent
+   *  (actualCollateralSeized) isn't captured by this validator's return shape. */
+  collateral_asset_symbol: string | null;
+  collateral_asset_decimals: number | null;
+  actual_collateral_amount: ColumnType<string | null, string | bigint | null | undefined, string | null>;
   detail: string | null;
   created_at: ColumnType<Date, string | undefined, never>;
 }

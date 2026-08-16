@@ -15,8 +15,17 @@ export interface ValidationResultDTO {
   presetId: string;
   magnitudePct: string;
   status: string;
+  /** expectedAmount/actualAmount are raw on-chain integers in debtAssetSymbol's own
+   *  decimals - decimal-adjust with debtAssetDecimals before display, never show bare. */
   expectedAmount: string | null;
   actualAmount: string | null;
+  debtAssetSymbol: string | null;
+  debtAssetDecimals: number | null;
+  /** Raw, in collateralAssetSymbol's own decimals - same rule as above. Fluid only
+   *  (Aave's equivalent isn't captured by this validator's return shape). */
+  actualCollateralAmount: string | null;
+  collateralAssetSymbol: string | null;
+  collateralAssetDecimals: number | null;
   detail: string | null;
   createdAt: string;
 }
@@ -50,6 +59,11 @@ export function registerValidationResultsRoutes(app: FastifyInstance, deps: { db
         status: r.status,
         expectedAmount: r.expected_amount,
         actualAmount: r.actual_amount,
+        debtAssetSymbol: r.debt_asset_symbol,
+        debtAssetDecimals: r.debt_asset_decimals,
+        actualCollateralAmount: r.actual_collateral_amount,
+        collateralAssetSymbol: r.collateral_asset_symbol,
+        collateralAssetDecimals: r.collateral_asset_decimals,
         detail: r.detail,
         createdAt: r.created_at.toISOString(),
       }));

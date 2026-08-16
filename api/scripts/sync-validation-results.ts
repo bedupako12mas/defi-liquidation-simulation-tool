@@ -98,9 +98,22 @@ async function syncAave(): Promise<Row[]> {
     const collateralAsset = position.collateral[0]!.asset as `0x${string}`;
     const debtAsset = position.debt[0]!.asset as `0x${string}`;
     const collateralConfig = configByAsset.get(collateralAsset.toLowerCase());
-    if (!collateralConfig) continue;
+    const debtConfig = configByAsset.get(debtAsset.toLowerCase());
+    if (!collateralConfig || !debtConfig) continue;
 
-    const base = { protocol: "aave" as const, position_id: position.id, preset_id: AAVE_PRESET_ID, magnitude_pct: magnitudePct };
+    const base = {
+      protocol: "aave" as const,
+      position_id: position.id,
+      preset_id: AAVE_PRESET_ID,
+      magnitude_pct: magnitudePct,
+      // Real gap found by the user looking at the deployed tab: raw amounts with no unit -
+      // both legs' real symbol/decimals, so expected/actual amounts (debt) and the newly-
+      // captured actual_collateral_amount below can be decimal-adjusted and labeled.
+      debt_asset_symbol: debtConfig.symbol,
+      debt_asset_decimals: debtConfig.decimals,
+      collateral_asset_symbol: collateralConfig.symbol,
+      collateral_asset_decimals: collateralConfig.decimals,
+    };
 
     // Real, confirmed-live finding (this sync run): overriding only the collateral asset's
     // on-chain oracle left the debt asset's REAL, unshocked price in effect for the actual
@@ -134,7 +147,7 @@ async function syncAave(): Promise<Row[]> {
       // single position's state-override call rather than a batch. One position's RPC failure
       // shouldn't crash the whole sync run - record it and keep going, same resilience every
       // other loader in this codebase already has.
-      rows.push({ ...base, status: "unable-to-validate", expected_amount: null, actual_amount: null, detail: redactError(err) });
+      rows.push({ ...base, status: "unable-to-validate", expected_amount: null, actual_amount: null, actual_collateral_amount: null, detail: redactError(err) });
       continue;
     }
 
@@ -164,15 +177,18 @@ async function syncAave(): Promise<Row[]> {
           status,
           expected_amount: result.expectedDebtRepaid,
           actual_amount: result.actualDebtRepaid,
+          // Real gap fixed alongside the units work: this was already computed by the
+          // validator and simply never persisted before.
+          actual_collateral_amount: result.actualCollateralSeized,
           detail: status === "matched-within-drift" ? `${(Number(relativeDiffBps) / 100).toFixed(4)}% - consistent with unpinned-block interest accrual, not a logic error` : null,
         });
         break;
       }
       case "unable-to-validate":
-        rows.push({ ...base, status: "unable-to-validate", expected_amount: null, actual_amount: null, detail: result.reason });
+        rows.push({ ...base, status: "unable-to-validate", expected_amount: null, actual_amount: null, actual_collateral_amount: null, detail: result.reason });
         break;
       case "unexpected-revert":
-        rows.push({ ...base, status: "unexpected-revert", expected_amount: null, actual_amount: null, detail: result.rawError });
+        rows.push({ ...base, status: "unexpected-revert", expected_amount: null, actual_amount: null, actual_collateral_amount: null, detail: result.rawError });
         break;
       case "not-liquidatable":
         break; // shouldn't happen given the pre-filter; not an interesting row either way
@@ -181,10 +197,26 @@ async function syncAave(): Promise<Row[]> {
   return rows;
 }
 
+// Fluid represents native ETH with this sentinel address (fluidShockClassification.ts's
+// own constant, duplicated here rather than imported since it's a tiny display-only detail,
+// not the pricing/classification logic that file exists for).
+const FLUID_NATIVE_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE".toLowerCase();
+
 async function syncFluid(): Promise<Row[]> {
   const vaults = await loadFluidVaultConfigs(publicClient);
   const aaveReserves = await loadReserveConfigs(publicClient);
   const priceResolution = resolveFluidPrices(vaults, aaveReserves);
+  // Real gap found by the user: Fluid rows had no unit either (actualColAmt jammed into a
+  // free-text detail string, no decimals). FluidVaultConfig doesn't carry a symbol - reuse
+  // Aave's already-loaded reserve symbols for known tokens (same technique
+  // fluidShockClassification.ts's classifyFluidAssets already uses), "ETH" for the native
+  // sentinel, "UNKNOWN" only as a last resort (never silently guessed at).
+  const symbolByAddress = new Map(aaveReserves.map((r) => [r.asset.toLowerCase(), r.symbol]));
+  const symbolFor = (address: string) => {
+    const lower = address.toLowerCase();
+    if (lower === FLUID_NATIVE_ETH_SENTINEL) return "ETH";
+    return symbolByAddress.get(lower) ?? "UNKNOWN";
+  };
 
   const allPositions: Awaited<ReturnType<typeof loadFluidPositions>>["positions"] = [];
   for (let i = 0; i < vaults.length; i += FLUID_VAULT_CHUNK_SIZE) {
@@ -242,13 +274,21 @@ async function syncFluid(): Promise<Row[]> {
     if (!vault) continue;
 
     const resolution = await resolveFluidOverrideTarget(publicClient, vault.oracle, "internal-exchange-rate");
-    const base = { protocol: "fluid" as const, position_id: position.id, preset_id: "lst-depeg" };
+    const base = {
+      protocol: "fluid" as const,
+      position_id: position.id,
+      preset_id: "lst-depeg",
+      debt_asset_symbol: symbolFor(vault.borrowToken),
+      debt_asset_decimals: vault.borrowDecimals,
+      collateral_asset_symbol: symbolFor(vault.supplyToken),
+      collateral_asset_decimals: vault.supplyDecimals,
+    };
     if (resolution.status === "not-applicable") {
-      rows.push({ ...base, magnitude_pct: "0", status: "not-applicable", expected_amount: null, actual_amount: null, detail: resolution.reason });
+      rows.push({ ...base, magnitude_pct: "0", status: "not-applicable", expected_amount: null, actual_amount: null, actual_collateral_amount: null, detail: resolution.reason });
       continue;
     }
     if (resolution.status === "unable-to-validate") {
-      rows.push({ ...base, magnitude_pct: "0", status: "unable-to-validate", expected_amount: null, actual_amount: null, detail: resolution.reason });
+      rows.push({ ...base, magnitude_pct: "0", status: "unable-to-validate", expected_amount: null, actual_amount: null, actual_collateral_amount: null, detail: resolution.reason });
       continue;
     }
 
@@ -277,19 +317,22 @@ async function syncFluid(): Promise<Row[]> {
             status: "swept",
             expected_amount: null,
             actual_amount: result.actualDebtAmt,
-            detail: `actualColAmt=${result.actualColAmt}`,
+            // Real gap fixed alongside the units work: this was a free-text `detail` string
+            // before (`actualColAmt=...`), unitless and not machine-readable - a real column now.
+            actual_collateral_amount: result.actualColAmt,
+            detail: null,
           });
           recorded = true;
           break;
         }
         if (result.status === "unexpected-revert" && pct === FLUID_SHOCK_MAGNITUDES_PCT[FLUID_SHOCK_MAGNITUDES_PCT.length - 1]) {
-          rows.push({ ...base, magnitude_pct: String(-pct), status: "unexpected-revert", expected_amount: null, actual_amount: null, detail: result.rawError });
+          rows.push({ ...base, magnitude_pct: String(-pct), status: "unexpected-revert", expected_amount: null, actual_amount: null, actual_collateral_amount: null, detail: result.rawError });
           recorded = true;
         }
       }
     } catch (err) {
       // Same real-RPC-failure resilience as syncAave() - see that catch's comment.
-      rows.push({ ...base, magnitude_pct: "0", status: "unable-to-validate", expected_amount: null, actual_amount: null, detail: redactError(err) });
+      rows.push({ ...base, magnitude_pct: "0", status: "unable-to-validate", expected_amount: null, actual_amount: null, actual_collateral_amount: null, detail: redactError(err) });
       recorded = true;
     }
     if (!recorded) {
@@ -299,6 +342,7 @@ async function syncFluid(): Promise<Row[]> {
         status: "unable-to-validate",
         expected_amount: null,
         actual_amount: null,
+        actual_collateral_amount: null,
         detail: `No sweep within -${FLUID_SHOCK_MAGNITUDES_PCT[FLUID_SHOCK_MAGNITUDES_PCT.length - 1]}% (HF=${(Number(hf) / 1e18).toFixed(4)})`,
       });
     }

@@ -30,8 +30,16 @@ export interface ValidationResult {
   presetId: string;
   magnitudePct: string;
   status: ValidationStatus;
+  /** Raw on-chain integers, in debtAssetSymbol's own decimals - use lib/format.ts's
+   *  formatTokenAmount, never display bare. */
   expectedAmount: string | null;
   actualAmount: string | null;
+  debtAssetSymbol: string | null;
+  debtAssetDecimals: number | null;
+  /** Fluid only (Aave's equivalent isn't captured by the validator's return shape). */
+  actualCollateralAmount: string | null;
+  collateralAssetSymbol: string | null;
+  collateralAssetDecimals: number | null;
   detail: string | null;
   createdAt: string;
 }

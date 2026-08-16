@@ -3,6 +3,8 @@
 import { useCapabilities } from "@/lib/hooks/useCapabilities";
 import { UcFrontierTable } from "@/components/overview/UcFrontierTable";
 import { LimitationsPanel } from "@/components/shared/LimitationsPanel";
+import { InfoTooltip } from "@/components/shared/InfoTooltip";
+import { Glossary } from "@/components/shared/Glossary";
 
 export function MethodologyTab() {
   const { meta, loading, error } = useCapabilities();
@@ -25,7 +27,11 @@ export function MethodologyTab() {
               <span className="tag tag-healthy">Healthy</span>
             </div>
             <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-              Health factor &ge; 1. No liquidation is possible.
+              Has more collateral value than it needs. No liquidation is possible.
+              <InfoTooltip label="What health factor means">
+                <strong>Technical:</strong> health factor (collateral value &times; liquidation
+                threshold, divided by debt value) &ge; 1.
+              </InfoTooltip>
             </div>
           </div>
           <div className="three-state-cell">
@@ -34,18 +40,22 @@ export function MethodologyTab() {
               <span className="tag tag-eligible" style={{ marginLeft: "0.35rem" }}>Eligible</span>
             </div>
             <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-              Health factor &lt; 1, but current LTV is still under the undercollateralization
-              (UC) frontier, 1/(1+i). Aave calls this state <strong>Liquidatable</strong>; Fluid
-              T1 positions are labeled <strong>Eligible</strong> instead - deliberately
-              different words for a real mechanistic difference, not a display quirk. Aave&apos;s
-              <code>liquidationCall()</code> targets one specific user&apos;s specific reserves
-              directly - crossing this line is individually actionable, right now. Fluid&apos;s
-              <code>liquidate()</code> has no per-user targeting at all (verified directly
-              against its source) - it sweeps aggregate ticks from worst to a threshold,
-              consuming whatever positions sit in that range. &ldquo;Eligible&rdquo; means a
-              position&apos;s ratio has entered the zone a sweep <em>could</em> reach - not a
-              guarantee it will be, which depends on aggregate sweep depth and what else is
-              queued ahead of it in the same vault.
+              A liquidator could step in and profit right now - though on Fluid that depends on
+              whether a sweep actually reaches this position, not a guarantee.
+              <InfoTooltip label="Technical definition of Liquidatable / Eligible">
+                Health factor &lt; 1, but current LTV is still under the undercollateralization
+                (UC) frontier, 1/(1+i). Aave calls this state <strong>Liquidatable</strong>; Fluid
+                T1 positions are labeled <strong>Eligible</strong> instead - deliberately
+                different words for a real mechanistic difference, not a display quirk. Aave&apos;s{" "}
+                <code>liquidationCall()</code> targets one specific user&apos;s specific reserves
+                directly - crossing this line is individually actionable, right now. Fluid&apos;s{" "}
+                <code>liquidate()</code> has no per-user targeting at all (verified directly
+                against its source) - it sweeps aggregate ticks from worst to a threshold,
+                consuming whatever positions sit in that range. &ldquo;Eligible&rdquo; means a
+                position&apos;s ratio has entered the zone a sweep <em>could</em> reach - not a
+                guarantee it will be, which depends on aggregate sweep depth and what else is
+                queued ahead of it in the same vault.
+              </InfoTooltip>
             </div>
           </div>
           <div className="three-state-cell">
@@ -53,10 +63,14 @@ export function MethodologyTab() {
               <span className="tag tag-toxic">Toxic</span>
             </div>
             <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-              Current LTV has crossed the UC frontier. Any liquidation at the current fixed
-              incentive is now guaranteed to make LTV worse, not better - the mechanism that
-              produces bad debt, not merely a risk of it. Toxic is always a strict subset of
-              Liquidatable/Eligible, not a separate condition reached independently.
+              Too far gone for liquidation to help - every allowed liquidation now makes the
+              position worse, which is how bad debt gets created.
+              <InfoTooltip label="Technical definition of Toxic">
+                Current LTV has crossed the UC frontier. Any liquidation at the current fixed
+                incentive is now guaranteed to make LTV worse, not better - the mechanism that
+                produces bad debt, not merely a risk of it. Toxic is always a strict subset of
+                Liquidatable/Eligible, not a separate condition reached independently.
+              </InfoTooltip>
             </div>
           </div>
         </div>
@@ -71,7 +85,8 @@ export function MethodologyTab() {
         <h2>Two confidence levels, not one</h2>
         <p className="preset-note" style={{ marginTop: 0 }}>
           The numbers in this tool are not all equally certain, and shouldn&apos;t be read as
-          if they were.
+          if they were. In short: treat Level 1 numbers as verified fact, and Level 2 numbers
+          as a clearly-labeled, real-but-simplified estimate.
         </p>
         <p className="preset-note">
           <strong>Health factor and LTV are Level 1</strong>: exact, real liquidation-formula
@@ -84,7 +99,17 @@ export function MethodologyTab() {
         <p className="preset-note">
           <strong>Bad debt is Level 2</strong>: a simplified aggregate approximation
           (<code>max(0, debt - collateral)</code>) at the shocked price - it does not replicate
-          the real contract&apos;s close-factor limits or per-asset seizure mechanics. The
+          the real contract&apos;s close-factor
+          <InfoTooltip label="What close factor means">
+            <strong>Plain language:</strong> most lending protocols cap how much of a single
+            position&apos;s debt can be repaid in one liquidation call (e.g. 50% at a time), so
+            a badly underwater position may take several liquidations to fully unwind, not one.
+            <br />
+            <br />
+            <strong>Technical:</strong> the real contract&apos;s close-factor limit, which this
+            tool&apos;s Level 2 bad-debt approximation does not replicate.
+          </InfoTooltip>{" "}
+          limits or per-asset seizure mechanics. The
           Validation tab checks a bounded real sample of positions against the real contract
           directly (<code>eth_call</code> against the real liquidation function with a price
           override, for both protocols, no fork or mined transaction) - it does not replace
@@ -94,7 +119,14 @@ export function MethodologyTab() {
       </div>
 
       <div className="card">
-        <h2>The undercollateralization frontier - LTV_UC = 1 / (1 + i)</h2>
+        <h2>
+          The undercollateralization frontier - LTV_UC = 1 / (1 + i)
+          <InfoTooltip label="What the UC frontier means, in plain terms">
+            <strong>Plain language:</strong> past a certain debt-to-collateral ratio, liquidating
+            a position can no longer make it healthier - every liquidation from there only digs
+            the hole deeper. That ratio is the UC (undercollateralization) frontier.
+          </InfoTooltip>
+        </h2>
         <p className="preset-note" style={{ marginTop: 0, marginBottom: "1rem" }}>
           A liquidation above this frontier is mathematically guaranteed to make the position
           worse, not better - a direct algebraic consequence of the protocol&apos;s own
@@ -145,7 +177,13 @@ export function MethodologyTab() {
             explicitly, rather than leave hidden inside the total.
           </li>
           <li>
-            <strong>Concentration</strong> - the single largest at-risk position&apos;s share of
+            <strong>Concentration</strong>
+            <InfoTooltip label="What concentration means, in plain terms">
+              How much of the at-risk collateral total is really just one whale position, rather
+              than broadly spread risk. High concentration means a single position could swing
+              the numbers on its own.
+            </InfoTooltip>{" "}
+            - the single largest at-risk position&apos;s share of
             all at-risk collateral, at a given shock. Found empirically necessary this session:
             a real ~$150M Fluid position was found to account for the large majority of one
             shock magnitude&apos;s entire liquidatable-collateral total on its own. High
@@ -182,6 +220,17 @@ export function MethodologyTab() {
         <h2>Known limitations</h2>
         {loading && <p className="loading">Loading...</p>}
         {meta && <LimitationsPanel limitations={meta.limitations} />}
+      </div>
+
+      <div className="card">
+        <h2>Glossary</h2>
+        <p className="preset-note" style={{ marginTop: 0, marginBottom: "1rem" }}>
+          Every metric and status shown anywhere in this app, in one place - grouped by
+          where it appears. The inline (i) icons throughout explain a term where it&apos;s
+          used; this is the central lookup for &ldquo;I saw a word somewhere, what did it
+          mean.&rdquo;
+        </p>
+        <Glossary />
       </div>
     </div>
   );
