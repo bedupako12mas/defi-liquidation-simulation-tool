@@ -24,10 +24,26 @@ describe("ValidationTab", () => {
     expect(screen.queryByText(/Not built yet/)).toBeNull();
   });
 
-  it("renders real tables, not just prose - validation (Aave, Fluid) + profitability (Aave, Fluid)", async () => {
+  it("renders real tables, not just prose - validation (Aave, Fluid) + profitability (Aave; Fluid is summary-only, see below)", async () => {
     const { container } = render(<ValidationTab />);
     await waitFor(() => expect(screen.queryAllByText(/Loading/).length).toBe(0));
-    expect(container.querySelectorAll("table").length).toBe(4);
+    // 2 validation tables + 1 Aave profitability table. Fluid's profitability mock is now
+    // deliberately all "unable-to-validate" (matching a real deployed run) - it renders a
+    // collapsed summary line, not an empty/all-dead table.
+    expect(container.querySelectorAll("table").length).toBe(3);
+  });
+
+  it("collapses zero-signal profitability rows into a grouped summary instead of one dead row each", async () => {
+    render(<ValidationTab />);
+    await waitFor(() => expect(screen.queryAllByText(/Loading/).length).toBe(0));
+
+    // Real, grouped counts, not 5 near-identical individual rows.
+    expect(screen.getByText(/3 × no sweep within the tested range/)).toBeInTheDocument();
+    expect(screen.getByText(/2 × Oracle doesn't expose getOracleHopSources/)).toBeInTheDocument();
+
+    // The HF-specific detail text that used to appear once per row is gone from the
+    // collapsed summary (it's stripped during grouping) - never shown as 5 separate lines.
+    expect(screen.queryByText(/HF=1\.0959/)).toBeNull();
   });
 
   it("shows every money/token amount with a real unit, never a bare number", async () => {

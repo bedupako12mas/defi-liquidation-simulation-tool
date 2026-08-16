@@ -134,43 +134,84 @@ function FluidValidationTable({ rows }: { rows: ValidationResult[] }) {
   );
 }
 
+/** "unable-to-validate" rows never produced a real economic result at all (the position
+ *  never crossed threshold within the tested magnitude range, or its oracle isn't a
+ *  supported hop pattern) - genuinely zero signal, unlike "unable-to-estimate-gas" (which
+ *  DID become liquidatable and hit a real, specific constraint like MustNotLeaveDust) or
+ *  profitable/unprofitable (a real computed outcome). A real, confirmed-live case: a
+ *  sampled Fluid book where every single row landed here gave a reader zero actionable
+ *  information from 25 near-identical dead rows - collapsed into a grouped summary instead,
+ *  keeping every row with a real attempted outcome fully detailed. */
+function normalizeReason(detail: string | null): string {
+  if (!detail) return "no reason given";
+  // Strip a trailing "(HF=1.2345)"-style parenthetical so e.g. 15 real HF values that are
+  // otherwise the identical real reason group into one line, not 15 near-duplicate ones.
+  return detail.replace(/\s*\([^)]*\)\s*$/, "").trim();
+}
+
 function ProfitabilityTable({ rows }: { rows: LiquidationProfitability[] }) {
   if (rows.length === 0) return <p className="loading">No profitability results yet.</p>;
+
+  const signalRows = rows.filter((r) => r.status !== "unable-to-validate");
+  const noSignalRows = rows.filter((r) => r.status === "unable-to-validate");
+
+  const noSignalGroups = new Map<string, number>();
+  for (const r of noSignalRows) {
+    const key = normalizeReason(r.detail);
+    noSignalGroups.set(key, (noSignalGroups.get(key) ?? 0) + 1);
+  }
+
   return (
     <>
       <p className="preset-note" style={{ marginTop: 0 }}>{rows.length} real (position, shock magnitude) pairs checked - {summarize(rows, PROFITABILITY_STATUS_TAG)}.</p>
-      <div style={{ overflowX: "auto" }}>
-        <table>
-          <thead>
-            <tr>
-              <th>Position</th>
-              <th>Shock</th>
-              <th>Status</th>
-              <th>Gas used</th>
-              <th>Gas cost</th>
-              <th>Debt cleared</th>
-              <th>Bonus received</th>
-              <th>Net profit</th>
-              <th>Detail</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={`${r.protocol}-${r.positionId}-${r.presetId}-${r.magnitudePct}-${i}`}>
-                <td><code>{shortenPositionId(r.positionId)}</code></td>
-                <td className="num">{r.presetId} @ {formatMagnitudePct(r.magnitudePct)}</td>
-                <td><StatusTag status={r.status} map={PROFITABILITY_STATUS_TAG} /></td>
-                <td className="num">{formatGas(r.gasUsed)}</td>
-                <td className="num">{formatUsd8(r.gasCostUsd8)}</td>
-                <td className="num">{formatUsd8(r.debtClearedUsd8)}</td>
-                <td className="num">{formatUsd8(r.bonusValueUsd8)}</td>
-                <td className="num">{formatUsd8(r.netProfitUsd8)}</td>
-                <td className="provenance">{r.detail ?? "—"}</td>
+      {signalRows.length > 0 && (
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Position</th>
+                <th>Shock</th>
+                <th>Status</th>
+                <th>Gas used</th>
+                <th>Gas cost</th>
+                <th>Debt cleared</th>
+                <th>Bonus received</th>
+                <th>Net profit</th>
+                <th>Detail</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {signalRows.map((r, i) => (
+                <tr key={`${r.protocol}-${r.positionId}-${r.presetId}-${r.magnitudePct}-${i}`}>
+                  <td><code>{shortenPositionId(r.positionId)}</code></td>
+                  <td className="num">{r.presetId} @ {formatMagnitudePct(r.magnitudePct)}</td>
+                  <td><StatusTag status={r.status} map={PROFITABILITY_STATUS_TAG} /></td>
+                  <td className="num">{formatGas(r.gasUsed)}</td>
+                  <td className="num">{formatUsd8(r.gasCostUsd8)}</td>
+                  <td className="num">{formatUsd8(r.debtClearedUsd8)}</td>
+                  <td className="num">{formatUsd8(r.bonusValueUsd8)}</td>
+                  <td className="num">{formatUsd8(r.netProfitUsd8)}</td>
+                  <td className="provenance">{r.detail ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {noSignalGroups.size > 0 && (
+        <p className="preset-note">
+          <strong>{noSignalRows.length} of {rows.length} positions gave no real economic
+          signal</strong> (never became liquidatable within the tested magnitude range, or an
+          unsupported oracle - a disclosed scope limit, not a hidden failure):{" "}
+          {[...noSignalGroups.entries()].map(([reason, count], i) => (
+            <span key={reason}>
+              {i > 0 ? "; " : ""}
+              {count} × {reason}
+            </span>
+          ))}
+          .
+        </p>
+      )}
     </>
   );
 }
