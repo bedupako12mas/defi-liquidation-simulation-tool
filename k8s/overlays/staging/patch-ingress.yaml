@@ -4,6 +4,16 @@
 # deployment's scope). This was previously a live-only kubectl patch that a real CI/CD
 # deploy then silently overwrote on every push - committing the real value here is what
 # actually fixes that, not another live patch.
+#
+# REAL BUG, CAUGHT LIVE: this host was previously the BARE domain (64-225-85-246.nip.io,
+# no "staging." prefix) - identical to what a request with no matching Host header falls
+# through to, since prod's ingress only explicitly matches "prod.64-225-85-246.nip.io".
+# That meant anything hitting the bare domain silently landed on STAGING, not prod - and
+# the deployed Vercel frontend's NEXT_PUBLIC_API_BASE was set to exactly that bare domain,
+# so the live site was reading staging's (stale/incomplete) data the whole time, not
+# prod's, with no error or indication anything was wrong (both respond 200 with a real,
+# well-formed MetaResponse - just from different databases with different sync history).
+# Fixed to genuinely mirror prod's own naming convention.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -14,7 +24,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
 spec:
   rules:
-    - host: 64-225-85-246.nip.io
+    - host: staging.64-225-85-246.nip.io
       http:
         paths:
           - path: /
@@ -26,5 +36,5 @@ spec:
                   name: http
   tls:
     - hosts:
-        - 64-225-85-246.nip.io
-      secretName: api-tls
+        - staging.64-225-85-246.nip.io
+      secretName: api-tls-staging
