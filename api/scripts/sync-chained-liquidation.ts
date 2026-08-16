@@ -57,6 +57,7 @@ async function findChainedResult(
   shockedPrices: PriceVector,
   configByAsset: Map<string, AaveReserveConfig>,
   forkPort: number,
+  pinnedBlock: bigint,
 ): Promise<Insertable<ChainedLiquidationResultsTable> | null> {
   const collateralB = positionB.collateral[0]!.asset as `0x${string}`;
   const debtB = positionB.debt[0]!.asset as `0x${string}`;
@@ -66,6 +67,11 @@ async function findChainedResult(
   // Prefilter via the same cheap eth_call validateAaveLiquidation uses (no fork, no
   // mutation) - real Aave has caps beyond HF<1 (e.g. the disclosed MustNotLeaveDust gap)
   // a naive filter can't predict, so the real mined tx below isn't a coin flip.
+  // NOT pinned to pinnedBlock (validateAaveLiquidation has no blockNumber param, and it's
+  // shared, already-tested code the Validation tab also depends on - not worth threading a
+  // block param through it for this). A small residual staleness here is low-stakes: it can
+  // only make this prefilter's prediction occasionally wrong, which is already handled
+  // (A's real tx status is checked and disclosed either way, never assumed from the prefilter).
   let positionA: Position | undefined;
   for (const candidate of candidatesForA.slice(0, PREFILTER_ATTEMPTS)) {
     const collateralAsset = candidate.collateral[0]!.asset as `0x${string}`;
@@ -100,7 +106,11 @@ async function findChainedResult(
     // A distinct port per group, not the shared default - SIGKILL doesn't guarantee the OS
     // releases the previous group's port before the next spawn, and reusing one port raced
     // live (a real WaitForTransactionReceiptTimeoutError on the second group in a run).
-    fork = await startAnvilFork(undefined, forkPort);
+    // Pinned to the SAME block main() read reserveConfigs/positions at - without this, the
+    // fork forks at "latest AT SPAWN TIME," a few seconds after the data above was read, a
+    // real (if usually minor) TOCTOU gap between what was checked and what the fork actually
+    // starts from. Pinning closes it and makes a run reproducible against the same real state.
+    fork = await startAnvilFork(pinnedBlock, forkPort);
 
     // NOT lowercased: shockedPrices is keyed by the exact checksummed casing
     // reserveConfigs/position legs already share - lowercasing here silently drops every
@@ -197,10 +207,16 @@ async function findChainedResult(
 async function main() {
   await assertAllowedChain();
 
+  // Captured once, used for every real-chain read below AND as the fork's own pin point -
+  // otherwise the fork forks at "latest at spawn time," a few seconds after this data was
+  // read, a real TOCTOU gap between what was checked and what the fork actually starts from.
+  const pinnedBlock = await publicClient.getBlockNumber();
+  console.log(`[sync-chained] pinned to block ${pinnedBlock}`);
+
   const candidates = await db.selectFrom("aave_borrow_candidates").select("address").limit(CANDIDATE_LIMIT).execute();
-  const { dataProvider, pool, oracle } = await resolveAaveAddresses(publicClient);
-  const reserveConfigs = await loadReserveConfigs(publicClient);
-  const { positions } = await enrichPositions(publicClient, dataProvider, candidates.map((c) => c.address), reserveConfigs, undefined, 8);
+  const { dataProvider, pool, oracle } = await resolveAaveAddresses(publicClient); // static addresses, block-independent - not worth pinning
+  const reserveConfigs = await loadReserveConfigs(publicClient, pinnedBlock);
+  const { positions } = await enrichPositions(publicClient, dataProvider, candidates.map((c) => c.address), reserveConfigs, pinnedBlock, 8);
 
   const realPrices: PriceVector = Object.fromEntries(reserveConfigs.map((r) => [r.asset, r.priceUsd8]));
   const assetConfig: Record<string, AssetShockConfig> = Object.fromEntries(
@@ -227,7 +243,7 @@ async function main() {
   const rows: Insertable<ChainedLiquidationResultsTable>[] = [];
   for (let i = 0; i < groups.length; i++) {
     const [positionB, ...candidatesForA] = groups[i]!;
-    const result = await findChainedResult(pool, oracle, dataProvider, positionB!, candidatesForA, shockedPrices, configByAsset, 8546 + i);
+    const result = await findChainedResult(pool, oracle, dataProvider, positionB!, candidatesForA, shockedPrices, configByAsset, 8546 + i, pinnedBlock);
     if (result) rows.push(result);
   }
 

@@ -14,7 +14,14 @@ import { createRpcClient } from "../rpc/client.js";
  * uses for the test suite, and tears down immediately after. Never deployed to the cluster.
  */
 
-const DEFAULT_PORT = 8546; // deliberately different from test/globalSetup.ts's 8545, so a sync run and the test suite can never collide on the same port
+// Port convention across this project's fork-based scripts, so two of them can never collide
+// even if run concurrently (a real, live-caught bug within a single script - see
+// sync-chained-liquidation.ts's port-per-group fix - not yet an observed cross-script
+// collision, but the same class of failure): test/globalSetup.ts owns 8545 fixed;
+// sync-chained-liquidation.ts (Aave, #37) owns 8546 + groupIndex; the Fluid chained-
+// liquidation/CappedRate scripts (#38) own 8600 + index - deliberately far apart so a
+// realistic number of Aave groups can never grow into Fluid's range.
+const DEFAULT_PORT = 8546;
 
 export interface AnvilFork {
   rpcUrl: string;
