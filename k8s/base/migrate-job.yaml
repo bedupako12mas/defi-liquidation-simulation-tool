@@ -1,0 +1,85 @@
+# k8s/base/migrate-job.yaml
+#
+# Real, disclosed gap this closes: nothing in CI/CD has ever run a migration - every
+# migration up to and including 0003_validation_results.ts was applied by hand via
+# `kubectl exec` against a live pod, for both staging and prod (docs/decisions.md).
+# scripts/ is dev-only and was never copied into the Docker image, so there was no
+# migration entrypoint INSIDE the deployed image at all - fixed by moving the real
+# Migrator logic to src/db/migrate.ts, which the normal `npm run build` now compiles to
+# dist/db/migrate.js automatically, no Dockerfile change needed.
+#
+# Deliberately NOT listed in kustomization.yaml's `resources:` - a Job's pod template is
+# immutable after creation, so re-applying it every deploy (a new image digest each time)
+# would fail on the second deploy onward if it were applied the same way as the
+# Deployment/Service/Ingress. Instead, .github/workflows/deploy.yml applies this file on
+# its own, explicitly: delete any previous run, apply this one with the real image
+# substituted in, wait for completion, THEN roll out the Deployment - schema before code
+# that might depend on it, not racing them.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  labels:
+    app.kubernetes.io/name: api
+    app.kubernetes.io/part-of: liquidation-simulator
+    app.kubernetes.io/component: migration
+spec:
+  # Fail fast and loud on a bad migration, not silently retried - a migration failure
+  # needs a human looking at it, not three quiet attempts burying the real error.
+  backoffLimit: 0
+  # Auto-cleans the completed Job object after an hour - harmless either way (Jobs don't
+  # consume ongoing resources once their pod exits), but keeps `kubectl get jobs` from
+  # accumulating one entry per deploy forever.
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: Never
+      # Same reasoning as deployment.yaml - this Job never calls the Kubernetes API itself.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          # Placeholder, same convention as deployment.yaml's `image: "api:unset"` - the
+          # workflow substitutes the real digest-pinned image before applying this file.
+          # Uses the SAME image as the real API deployment, not a separate build - the
+          # compiled dist/db/migrate.js this runs is exactly what shipped, never a
+          # different, unscanned artifact.
+          image: "api:unset"
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/db/migrate.js"]
+          envFrom:
+            - secretRef:
+                name: api-secrets
+          env:
+            # Same TEMPORARY reasoning as deployment.yaml's identical env var - see that
+            # file's comment for the real fix to revisit alongside the Vault migration.
+            - name: NODE_TLS_REJECT_UNAUTHORIZED
+              value: "0"
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+      volumes:
+        - name: tmp
+          emptyDir: {}

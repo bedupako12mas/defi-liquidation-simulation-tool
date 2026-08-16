@@ -67,6 +67,23 @@ jobs:
       - name: Authenticate to DOKS
         run: doctl kubernetes cluster kubeconfig save "${{ secrets.DOKS_CLUSTER_NAME_STAGING }}"
 
+      # Real, disclosed gap this closes (docs/decisions.md): nothing in CI/CD has ever run
+      # a migration before this - every one so far was applied by hand via `kubectl exec`.
+      # Runs BEFORE the Deployment rollout below, schema before code that might depend on
+      # it, not racing them. Not part of `kubectl apply -k .` (see migrate-job.yaml's own
+      # comment for why a Job's immutable pod template can't be re-applied every deploy the
+      # same way) - deleted and reapplied explicitly instead.
+      - name: Run migration
+        run: |
+          kubectl delete job migrate -n liquidation-sim-staging --ignore-not-found
+          sed "s#api:unset#$DIGEST#" k8s/base/migrate-job.yaml | kubectl apply -n liquidation-sim-staging -f -
+          if ! kubectl wait --for=condition=complete job/migrate -n liquidation-sim-staging --timeout=120s; then
+            echo "::error::Migration job did not complete - dumping logs"
+            kubectl logs job/migrate -n liquidation-sim-staging --tail=200 || true
+            exit 1
+          fi
+          kubectl logs job/migrate -n liquidation-sim-staging --tail=100
+
       - name: Set image and apply staging overlay
         run: |
           cd k8s/overlays/staging
@@ -106,6 +123,18 @@ jobs:
 
       - name: Authenticate to DOKS
         run: doctl kubernetes cluster kubeconfig save "${{ secrets.DOKS_CLUSTER_NAME_PROD }}"
+
+      # See deploy-staging's identical step - same reasoning, prod's own namespace/DB.
+      - name: Run migration
+        run: |
+          kubectl delete job migrate -n liquidation-sim-prod --ignore-not-found
+          sed "s#api:unset#$DIGEST#" k8s/base/migrate-job.yaml | kubectl apply -n liquidation-sim-prod -f -
+          if ! kubectl wait --for=condition=complete job/migrate -n liquidation-sim-prod --timeout=120s; then
+            echo "::error::Migration job did not complete - dumping logs"
+            kubectl logs job/migrate -n liquidation-sim-prod --tail=200 || true
+            exit 1
+          fi
+          kubectl logs job/migrate -n liquidation-sim-prod --tail=100
 
       - name: Set image and apply prod overlay
         run: |

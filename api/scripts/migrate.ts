@@ -1,34 +1,11 @@
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
-import { promises as fs } from "node:fs";
-import { Migrator, FileMigrationProvider } from "kysely/migration";
 import { db } from "../src/db/client.js";
-import { redactError } from "../src/rpc/redact.js";
+import { runMigrations } from "../src/db/migrate.js";
 
-const migrationFolder = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../src/db/migrations",
-);
-
-const migrator = new Migrator({
-  db,
-  provider: new FileMigrationProvider({ fs, path, migrationFolder }),
-});
-
+// Thin CLI wrapper for local/manual dev (`npm run migrate` / `migrate:down`) - the real
+// Migrator logic lives in src/db/migrate.ts now, specifically so it also compiles into
+// dist/db/migrate.js and is runnable inside the real deployed container image (k8s Job,
+// see k8s/base/migrate-job.yaml), which scripts/ never was.
 const direction = process.argv[2] === "down" ? "down" : "up";
-const { error, results } =
-  direction === "up" ? await migrator.migrateToLatest() : await migrator.migrateDown();
-
-for (const result of results ?? []) {
-  const status = result.status === "Success" ? "OK" : result.status;
-  console.log(`[migration] ${result.migrationName}: ${status}`);
-}
-
-if (error) {
-  // See redact.ts - a pg connection error can embed DATABASE_URL, credentials included,
-  // directly in its .message.
-  console.error("[migration] failed:", redactError(error));
-  process.exit(1);
-}
-
+const ok = await runMigrations(direction);
 await db.destroy();
+process.exitCode = ok ? 0 : 1;
