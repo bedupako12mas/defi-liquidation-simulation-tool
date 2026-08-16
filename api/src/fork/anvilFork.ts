@@ -18,9 +18,10 @@ import { createRpcClient } from "../rpc/client.js";
 // even if run concurrently (a real, live-caught bug within a single script - see
 // sync-chained-liquidation.ts's port-per-group fix - not yet an observed cross-script
 // collision, but the same class of failure): test/globalSetup.ts owns 8545 fixed;
-// sync-chained-liquidation.ts (Aave, #37) owns 8546 + groupIndex; the Fluid chained-
-// liquidation/CappedRate scripts (#38) own 8600 + index - deliberately far apart so a
-// realistic number of Aave groups can never grow into Fluid's range.
+// sync-chained-liquidation.ts's Aave path (#37) owns 8546 + groupIndex; its Fluid chained-
+// liquidation path (#38) owns 8600 + index; sync-capped-rate-breach.ts (#38) owns
+// 8650 + index - each range deliberately far apart so realistic sweep sizes can never grow
+// into a neighboring range.
 const DEFAULT_PORT = 8546;
 
 export interface AnvilFork {

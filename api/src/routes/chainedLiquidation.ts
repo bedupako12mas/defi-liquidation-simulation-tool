@@ -23,8 +23,20 @@ export interface ChainedLiquidationDTO {
   chainedStatus: string | null;
   chainedDebtRepaid: string | null;
   debtRepaidDiff: string | null;
+  /** debtRepaidDiff as a percentage of isolatedDebtRepaid - the raw diff alone is not
+   *  interpretable without scale (e.g. a diff of 506 sounds notable until you see it's 506
+   *  out of 73 billion, i.e. 0.0007%). Null whenever debtRepaidDiff itself is null, or
+   *  isolatedDebtRepaid is zero (would be a div-by-zero, not a real 0%/undefined result). */
+  debtRepaidDiffPct: string | null;
   detail: string | null;
   createdAt: string;
+}
+
+function computeDiffPct(diff: string | null, isolated: string | null): string | null {
+  if (diff === null || isolated === null) return null;
+  const isolatedNum = Number(isolated);
+  if (isolatedNum === 0) return null;
+  return ((Number(diff) / isolatedNum) * 100).toFixed(6);
 }
 
 /**
@@ -64,6 +76,7 @@ export function registerChainedLiquidationRoutes(app: FastifyInstance, deps: { d
         chainedStatus: r.chained_status,
         chainedDebtRepaid: r.chained_debt_repaid,
         debtRepaidDiff: r.debt_repaid_diff,
+        debtRepaidDiffPct: computeDiffPct(r.debt_repaid_diff, r.isolated_debt_repaid),
         detail: r.detail,
         createdAt: r.created_at.toISOString(),
       }));

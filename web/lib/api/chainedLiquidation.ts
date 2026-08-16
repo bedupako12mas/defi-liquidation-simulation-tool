@@ -33,6 +33,10 @@ export interface ChainedLiquidationResult {
   /** Signed: chained - isolated. The real, fork-only-observable effect - zero is a genuine
    *  disclosed result (no measurable chaining effect for this pair), not a missing one. */
   debtRepaidDiff: string | null;
+  /** debtRepaidDiff as a % of isolatedDebtRepaid - the actually-interpretable number. A raw
+   *  diff like "506" is meaningless without scale (506 out of 73 billion = 0.0007%,
+   *  negligible; the % is what the Key Findings section should read from, not the raw diff). */
+  debtRepaidDiffPct: string | null;
   detail: string | null;
   createdAt: string;
 }

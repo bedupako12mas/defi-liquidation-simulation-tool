@@ -11,6 +11,7 @@ import { registerAnalyticsRoutes } from "./routes/analytics.js";
 import { registerValidationResultsRoutes } from "./routes/validationResults.js";
 import { registerLiquidationProfitabilityRoutes } from "./routes/liquidationProfitability.js";
 import { registerChainedLiquidationRoutes } from "./routes/chainedLiquidation.js";
+import { registerCappedRateBreachRoutes } from "./routes/cappedRateBreach.js";
 
 const app = Fastify({ logger: true });
 
@@ -60,6 +61,7 @@ registerAnalyticsRoutes(app, { db, client: publicClient });
 registerValidationResultsRoutes(app, { db });
 registerLiquidationProfitabilityRoutes(app, { db });
 registerChainedLiquidationRoutes(app, { db });
+registerCappedRateBreachRoutes(app, { db });
 
 app.get("/health", async () => ({ ok: true }));
 

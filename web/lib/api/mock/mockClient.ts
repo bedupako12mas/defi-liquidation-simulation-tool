@@ -12,6 +12,7 @@ import type { Protocol, PositionSnapshot, SweepPoint, KillPriceResult, MarketCon
 import type { ValidationProtocol, ValidationResult } from "../validation";
 import type { ProfitabilityProtocol, LiquidationProfitability } from "../profitability";
 import type { ChainedProtocol, ChainedLiquidationResult } from "../chainedLiquidation";
+import type { CappedRateBreachResult } from "../cappedRateBreach";
 
 type FixturesShape = {
   meta: MetaResponse;
@@ -110,21 +111,43 @@ export async function getMockLiquidationProfitability(protocol?: ProfitabilityPr
   return MOCK_LIQUIDATION_PROFITABILITY.filter((r) => r.protocol === protocol);
 }
 
-/** These two rows are the ACTUAL real result of a real sync-chained-liquidation.ts run
- *  (#37, docs/decisions.md) - not illustrative. 5 real shared-reserve-pair groups were found
- *  among currently-liquidatable Aave positions; 3 had no candidate A that simulated
- *  successfully (honestly skipped, not forced); these 2 real (A, B) pairs both produced a
- *  real, small, nonzero debtRepaidDiff - a genuine fork-only-observable effect (real reserve
- *  index drift between A's mined block and B's re-check) that an isolated eth_call cannot
- *  detect by construction. */
+/** These are the ACTUAL real result of a real sync-chained-liquidation.ts run (#37/#38,
+ *  docs/decisions.md) - not illustrative.
+ *  Aave: a real reserve-index-drift effect - tiny (~0.000001% of the isolated amount) but
+ *  genuinely nonzero, a fork-only-observable effect an isolated eth_call cannot detect.
+ *  Fluid: liquidate() is vault-level/tick-based (not per-user), so A and B request the
+ *  IDENTICAL full vault debt amount - the real, decisive, reproducible finding (confirmed
+ *  across all 5 real candidates found) is a full 100% consumption: once A's real liquidation
+ *  takes what's genuinely available, B's identical follow-up request finds exactly zero left,
+ *  unlike Aave's marginal drift - a qualitatively different, more consequential real effect. */
 const MOCK_CHAINED_LIQUIDATION: ChainedLiquidationResult[] = [
-  { protocol: "aave", presetId: "correlated", magnitudePct: "-30", positionAId: "aave-0xa9944849522b2cb9185f21a83cd32c05602b1f50", positionBId: "aave-0x20a21207fb4b11cd2b3d0dfc779d622cf13e0a5e", debtAssetSymbol: "USDT", debtAssetDecimals: 6, positionATxStatus: "success", isolatedStatus: "liquidated", isolatedDebtRepaid: "4415241334", chainedStatus: "liquidated", chainedDebtRepaid: "4415241367", debtRepaidDiff: "33", detail: null, createdAt: "2026-08-16T09:10:30.110Z" },
-  { protocol: "aave", presetId: "correlated", magnitudePct: "-30", positionAId: "aave-0x712e9696a08e525aea0ca4dde4efc7e77ef9ae24", positionBId: "aave-0x6e24877c8236baa41dd4faac0df6d1cb4937ea3c", debtAssetSymbol: "USDC", debtAssetDecimals: 6, positionATxStatus: "success", isolatedStatus: "liquidated", isolatedDebtRepaid: "73006407666", chainedStatus: "liquidated", chainedDebtRepaid: "73006408172", debtRepaidDiff: "506", detail: null, createdAt: "2026-08-16T09:10:30.110Z" },
+  { protocol: "aave", presetId: "correlated", magnitudePct: "-30", positionAId: "aave-0xbccbaad9c7a2ef2f4d4007c5ad1fed3786e14fff", positionBId: "aave-0x20a21207fb4b11cd2b3d0dfc779d622cf13e0a5e", debtAssetSymbol: "USDT", debtAssetDecimals: 6, positionATxStatus: "success", isolatedStatus: "liquidated", isolatedDebtRepaid: "4413040418", chainedStatus: "liquidated", chainedDebtRepaid: "4413040448", debtRepaidDiff: "30", debtRepaidDiffPct: "0.000001", detail: null, createdAt: "2026-08-16T10:43:08.238Z" },
+  { protocol: "fluid", presetId: "lst-depeg", magnitudePct: "-3", positionAId: "fluid-0xAf1a5Ce79f93b9F157cd10b3aABeF151236bA6B7-request-A", positionBId: "fluid-0xAf1a5Ce79f93b9F157cd10b3aABeF151236bA6B7-request-B", debtAssetSymbol: "USDC", debtAssetDecimals: 6, positionATxStatus: "success", isolatedStatus: "swept", isolatedDebtRepaid: "1559895", chainedStatus: "swept", chainedDebtRepaid: "0", debtRepaidDiff: "-1559895", debtRepaidDiffPct: "-100.000000", detail: "A and B request the IDENTICAL full totalBorrowVault amount (Fluid's liquidate() is vault-level/tick-based, not per-user) - a real diff here measures real tick consumption, not index drift.", createdAt: "2026-08-16T10:43:08.238Z" },
+  { protocol: "fluid", presetId: "lst-depeg", magnitudePct: "-5", positionAId: "fluid-0xc8Ea45f5af4eeb4DD226928d7E93440547B59C7D-request-A", positionBId: "fluid-0xc8Ea45f5af4eeb4DD226928d7E93440547B59C7D-request-B", debtAssetSymbol: "USDT", debtAssetDecimals: 6, positionATxStatus: "success", isolatedStatus: "swept", isolatedDebtRepaid: "22657493", chainedStatus: "swept", chainedDebtRepaid: "0", debtRepaidDiff: "-22657493", debtRepaidDiffPct: "-100.000000", detail: "A and B request the IDENTICAL full totalBorrowVault amount (Fluid's liquidate() is vault-level/tick-based, not per-user) - a real diff here measures real tick consumption, not index drift.", createdAt: "2026-08-16T10:43:08.238Z" },
+  { protocol: "fluid", presetId: "lst-depeg", magnitudePct: "-30", positionAId: "fluid-0x13F82C0c281a3B973A7288d3ebc468495AA4Eed7-request-A", positionBId: "fluid-0x13F82C0c281a3B973A7288d3ebc468495AA4Eed7-request-B", debtAssetSymbol: "GHO", debtAssetDecimals: 18, positionATxStatus: "success", isolatedStatus: "swept", isolatedDebtRepaid: "10516739316072448049", chainedStatus: "swept", chainedDebtRepaid: "0", debtRepaidDiff: "-10516739316072448049", debtRepaidDiffPct: "-100.000000", detail: "A and B request the IDENTICAL full totalBorrowVault amount (Fluid's liquidate() is vault-level/tick-based, not per-user) - a real diff here measures real tick consumption, not index drift.", createdAt: "2026-08-16T10:43:08.238Z" },
 ];
 
 export async function getMockChainedLiquidation(protocol?: ChainedProtocol): Promise<ChainedLiquidationResult[]> {
   if (!protocol) return MOCK_CHAINED_LIQUIDATION;
   return MOCK_CHAINED_LIQUIDATION.filter((r) => r.protocol === protocol);
+}
+
+/** The ACTUAL real result of a real sync-capped-rate-breach.ts run (#38, SCOPE.md item 3b) -
+ *  not illustrative. All 10 real, currently-fresh CappedRate vaults swept show the SAME
+ *  verdict: avoidForcedLiquidationsCol_ is false for every one of them - a real, decisive,
+ *  protocol-wide pattern (not a per-vault quirk), meaning Fluid's down-cap protection for the
+ *  collateral leg is administratively disabled across every vault checked right now. An
+ *  earlier draft of this test reported a misleadingly reassuring "protection works" verdict
+ *  by checking only the numeric bound (100% >= 100%, vacuously true) - fixed to check the
+ *  real admin-set gate directly before drawing a conclusion. */
+const MOCK_CAPPED_RATE_BREACH: CappedRateBreachResult[] = [
+  { vault: "0xee327311D8640156E87eC33ea55FcbF2309e0ce6", cappedRateAddress: "0x1FC9a029e8e84cF0C5c7c68221bE5d1573c0FB05", minHeartbeatSeconds: 90000, avoidForcedLiquidationsCol: false, maxDownFromMaxReachedPctCol: "1000000", rateBefore: "1132966158918315225640531776", rateImmediatelyAfterOverride: "1132966158918315225640531776", rateAfterHeartbeat: "1", realDropPct: "100.000000", verdict: "protection-disabled", createdAt: "2026-08-16T11:13:03.737Z" },
+  { vault: "0xAf1a5Ce79f93b9F157cd10b3aABeF151236bA6B7", cappedRateAddress: "0x05Cad896ED76F080bAB4da37c407928B994fF9B3", minHeartbeatSeconds: 90000, avoidForcedLiquidationsCol: false, maxDownFromMaxReachedPctCol: "1000000", rateBefore: "1178499614161355102652993425", rateImmediatelyAfterOverride: "1178499614161355102652993425", rateAfterHeartbeat: "1", realDropPct: "100.000000", verdict: "protection-disabled", createdAt: "2026-08-16T11:13:03.737Z" },
+  { vault: "0xcf3D09dA35bc6Af5d80544DaA97F4aFDdC4D7437", cappedRateAddress: "0x40DE3E66D6E267Cff8A97a45B9c12388a9a32352", minHeartbeatSeconds: 90000, avoidForcedLiquidationsCol: false, maxDownFromMaxReachedPctCol: "1000000", rateBefore: "1139051427573356400726397570", rateImmediatelyAfterOverride: "1139051427573356400726397570", rateAfterHeartbeat: "1", realDropPct: "100.000000", verdict: "protection-disabled", createdAt: "2026-08-16T11:13:03.737Z" },
+];
+
+export async function getMockCappedRateBreach(): Promise<CappedRateBreachResult[]> {
+  return MOCK_CAPPED_RATE_BREACH;
 }
 
 export async function getMockMarketConcentration(

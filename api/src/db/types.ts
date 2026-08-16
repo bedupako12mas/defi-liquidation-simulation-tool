@@ -132,6 +132,29 @@ export interface ChainedLiquidationResultsTable {
   created_at: ColumnType<Date, string | undefined, never>;
 }
 
+/** Written by scripts/sync-capped-rate-breach.ts (#38, SCOPE.md item 3b) - one row per real
+ *  Fluid CappedRate vault tested: does the real cap-enforcement logic correctly clamp an
+ *  extreme raw-source move once its heartbeat genuinely elapses (real time progression, only
+ *  possible on a fork)? Real, confirmed-live finding: every fresh vault checked has
+ *  avoidForcedLiquidationsCol_ = false, meaning the down-cap branch is administratively
+ *  disabled entirely for the collateral leg, not a numeric-bound question. */
+export interface CappedRateBreachResultsTable {
+  id: Generated<number>;
+  vault: string;
+  capped_rate_address: string;
+  min_heartbeat_seconds: number;
+  avoid_forced_liquidations_col: boolean;
+  /** 1e6-scale percent (1000000 = 100%), matching the real source's own _SIX_DECIMALS. */
+  max_down_from_max_reached_pct_col: Numeric;
+  rate_before: ColumnType<string, string | bigint, string | bigint>;
+  rate_immediately_after_override: ColumnType<string, string | bigint, string | bigint>;
+  rate_after_heartbeat: ColumnType<string, string | bigint, string | bigint>;
+  real_drop_pct: Numeric;
+  /** "protection-disabled" | "clamped-as-designed" | "unclamped-beyond-bound". */
+  verdict: string;
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
 export interface DB {
   snapshots: SnapshotsTable;
   indexer_progress: IndexerProgressTable;
@@ -141,4 +164,5 @@ export interface DB {
   validation_results: ValidationResultsTable;
   liquidation_profitability: LiquidationProfitabilityTable;
   chained_liquidation_results: ChainedLiquidationResultsTable;
+  capped_rate_breach_results: CappedRateBreachResultsTable;
 }

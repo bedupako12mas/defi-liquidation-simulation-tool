@@ -18,7 +18,8 @@
     "validate:fluid-liquidation": "tsx scripts/validate-fluid-liquidation.ts",
     "sync:validation-results": "tsx scripts/sync-validation-results.ts",
     "sync:liquidation-profitability": "tsx scripts/sync-liquidation-profitability.ts",
-    "sync:chained-liquidation": "tsx scripts/sync-chained-liquidation.ts"
+    "sync:chained-liquidation": "tsx scripts/sync-chained-liquidation.ts",
+    "sync:capped-rate-breach": "tsx scripts/sync-capped-rate-breach.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
