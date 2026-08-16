@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatUsd8, formatTokenAmount, formatGas, formatMagnitudePct } from "../format";
+import { formatUsd8, formatTokenAmount, formatGas, formatMagnitudePct, formatPct } from "../format";
 
 describe("formatUsd8", () => {
   it("formats a real 8-decimal USD value with $ and thousands separators", () => {
@@ -48,5 +48,21 @@ describe("formatMagnitudePct", () => {
   it("shows a signed magnitude with a trailing %", () => {
     expect(formatMagnitudePct("-30.00")).toBe("-30.00%");
     expect(formatMagnitudePct(-65)).toBe("-65.00%");
+  });
+});
+
+describe("formatPct", () => {
+  it("uses more decimals for a genuinely tiny real value, not rounding it to 0%", () => {
+    expect(formatPct("0.000001")).toBe("0.000001%");
+  });
+  it("uses 2 decimals for an ordinary-sized percentage", () => {
+    expect(formatPct("-100.000000")).toBe("-100.00%");
+  });
+  it("is null-safe", () => {
+    expect(formatPct(null)).toBe("—");
+    expect(formatPct(undefined)).toBe("—");
+  });
+  it("shows exactly 0% for a real zero result", () => {
+    expect(formatPct(0)).toBe("0%");
   });
 });

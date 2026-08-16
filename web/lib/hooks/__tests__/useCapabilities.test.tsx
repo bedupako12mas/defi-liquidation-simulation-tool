@@ -12,7 +12,7 @@ describe("useCapabilities", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(result.current.capabilities).toEqual({ rpc: true, fork: false });
+    expect(result.current.capabilities).toEqual({ rpc: true, fork: true });
     expect(result.current.meta).not.toBeNull();
     expect(result.current.error).toBeNull();
   });

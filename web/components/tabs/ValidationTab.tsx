@@ -1,8 +1,10 @@
 "use client";
 
 /**
- * The real Validation tier (#30/#36) plus gas-vs-bonus profitability (#43) - not a
- * fork-replay tier (that's Milestone 2, still a ComingSoonPanel stub in CascadeDetailTab).
+ * The real Validation tier (#30/#36) plus gas-vs-bonus profitability (#43) - the RPC tier
+ * (stateless eth_call, no fork, no mined transaction). CascadeDetailTab is the mainnet-fork
+ * tier (#37/#38, genuinely mined transactions on a real ephemeral fork) - now also real, a
+ * separate and complementary check, not a stub anymore either.
  * Both sections are genuinely real, RPC-tier checks: for a bounded real sample of
  * positions, api/src/validation/{aaveValidator,fluidValidator}.ts override each protocol's
  * real on-chain oracle price via a state-override eth_call and check the REAL

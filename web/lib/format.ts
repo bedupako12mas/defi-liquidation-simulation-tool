@@ -49,3 +49,16 @@ export function formatMagnitudePct(raw: string | number): string {
   const value = typeof raw === "string" ? Number(raw) : raw;
   return `${value.toFixed(2)}%`;
 }
+
+/** A general-purpose, already-computed percentage (e.g. a real measured diff-as-%-of-
+ *  baseline) - unlike formatMagnitudePct's fixed 2 decimals (fine for a shock input, which
+ *  is never sub-0.01%), this needs adaptive precision: a real chained-liquidation effect can
+ *  be genuinely as small as ~0.000001%, and .toFixed(2) would silently round it to "0.00%",
+ *  erasing the exact real, nonzero result the whole check exists to report. Null-safe. */
+export function formatPct(raw: string | number | null | undefined): string {
+  if (raw === null || raw === undefined) return "—";
+  const value = typeof raw === "string" ? Number(raw) : raw;
+  if (value === 0) return "0%";
+  const decimals = Math.abs(value) < 0.01 ? 6 : 2;
+  return `${value.toFixed(decimals)}%`;
+}

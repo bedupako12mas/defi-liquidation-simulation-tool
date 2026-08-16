@@ -177,6 +177,41 @@ const SECTIONS: GlossarySection[] = [
       },
     ],
   },
+  {
+    heading: "Mainnet-fork tier - real, mined-transaction checks",
+    entries: [
+      {
+        term: "A's real tx",
+        plain: "Whether the real liquidation this check depends on actually succeeded when mined.",
+        technical: "The receipt status of a real, mined transaction on a real ephemeral anvil fork - \"reverted\" means chaining wasn't testable for this pair/vault, disclosed rather than hidden.",
+        shownIn: "Cascade detail tab",
+      },
+      {
+        term: "B isolated / B chained",
+        plain: "The same check on position/vault B, once before and once after A's real liquidation was mined - comparing them is the whole point of this tier.",
+        technical: "\"Isolated\": B's real liquidation-call check on the fork before A is mined. \"Chained\": the identical check on the same fork after A's real transaction is mined. Neither is a fork-required check on its own - the comparison between them is.",
+        shownIn: "Cascade detail tab",
+      },
+      {
+        term: "Real diff / Real diff (%)",
+        plain: "How much B's result actually changed because A's liquidation really happened - something no isolated test can ever show.",
+        technical: "chainedDebtRepaid − isolatedDebtRepaid, both as a raw signed amount and as a percentage of the isolated baseline. Aave: typically tiny (~0.000001%, real reserve-index drift). Fluid: typically -100% (full tick consumption, liquidate() is vault-level not per-position, so a repeat identical request finds nothing left).",
+        shownIn: "Cascade detail tab",
+      },
+      {
+        term: "Down-cap enabled? / Configured max down / Real measured drop",
+        plain: "Whether Fluid's real protection against a crashed price is actually switched on for this vault, how far it's allowed to drop even when it is, and how far it actually dropped in this real test.",
+        technical: "avoidForcedLiquidationsCol_ (an admin-set boolean gate, independent of the numeric bound), maxDownFromMaxReachedPercentCol_ (1e6-scale, Fluid's own real source convention), and the real, measured percentage drop in getExchangeRateLiquidate()'s reported rate once a real heartbeat has genuinely elapsed on a fork.",
+        shownIn: "Cascade detail tab",
+      },
+      {
+        term: "Protection disabled / Clamped as designed / Unclamped beyond bound",
+        plain: "The real verdict: is this vault's price-crash protection off, working correctly, or - genuinely concerning - on but not holding?",
+        technical: "\"Protection disabled\": avoidForcedLiquidationsCol_ is false, so the down-cap branch never runs for this vault regardless of the numeric bound. \"Clamped as designed\": protection enabled and the real measured drop stayed within the configured bound. \"Unclamped beyond bound\": protection enabled but the real drop exceeded it - not expected.",
+        shownIn: "Cascade detail tab",
+      },
+    ],
+  },
 ];
 
 export function Glossary() {

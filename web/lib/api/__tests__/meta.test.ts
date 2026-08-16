@@ -2,10 +2,10 @@ import { describe, it, expect } from "vitest";
 import { fetchMeta } from "../meta";
 
 describe("fetchMeta (mock mode)", () => {
-  it("returns a MetaResponse with capabilities.rpc true and capabilities.fork false", async () => {
+  it("returns a MetaResponse with capabilities.rpc and capabilities.fork both true - the mainnet-fork tier (#37/#38) is real now, not a stub", async () => {
     const meta = await fetchMeta();
     expect(meta.mode).toBe("demo");
-    expect(meta.capabilities).toEqual({ rpc: true, fork: false });
+    expect(meta.capabilities).toEqual({ rpc: true, fork: true });
   });
 
   it("returns all five named presets", async () => {

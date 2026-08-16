@@ -6,11 +6,13 @@ describe("Glossary", () => {
   it("covers every metric shown across the app, not just position-state terms", () => {
     render(<Glossary />);
     // One from each real section - position states, comparison metrics, validation
-    // statuses, and profitability, so a regression that drops a whole section fails loudly.
+    // statuses, profitability, and the mainnet-fork tier - so a regression that drops a
+    // whole section fails loudly.
     expect(screen.getByText("Health factor (HF)")).toBeInTheDocument();
     expect(screen.getByText("Concentration")).toBeInTheDocument();
     expect(screen.getByText("Matched / Matched (within drift)")).toBeInTheDocument();
     expect(screen.getByText("Net profit")).toBeInTheDocument();
+    expect(screen.getByText("Real diff / Real diff (%)")).toBeInTheDocument();
   });
 
   it("gives every term both a plain-language and a technical definition", () => {

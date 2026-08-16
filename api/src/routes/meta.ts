@@ -99,7 +99,7 @@ export function registerMetaRoute(app: FastifyInstance, deps: { db: Kysely<DB>; 
       presets: Object.values(SHOCK_PRESETS),
       ucFrontier,
       limitations: LIMITATIONS,
-      capabilities: { rpc: true, fork: false },
+      capabilities: { rpc: true, fork: true },
     };
   });
 }

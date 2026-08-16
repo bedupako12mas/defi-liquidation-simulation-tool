@@ -285,9 +285,8 @@ const LIMITATIONS = [
   "No second-order price impact - a real liquidation dumping seized collateral into an AMM would push price down further and trigger the next tranche. This static sweep does not model that.",
   "Correlation/depeg betas are assumptions, not fitted from data (except severe-depeg's 7%, grounded in the real June 2022 stETH event).",
   "No routine oracle update lag modeled (Chainlink heartbeat/deviation delay) - prices are assumed to update instantaneously and fully. See docs/SCOPE.md's 3a/3b split for why this is distinct from designed staleness (CappedRate), which the fork tier targets.",
-  "No gas-vs-bonus profitability check - the model does not ask whether a bot would bother liquidating a small position given gas cost vs. bonus.",
   "No liquidity/slippage-capacity check - the model does not ask whether the market can actually absorb the seized collateral at a profit.",
-  "No toxic-liquidation-spiral / cascade dynamics simulated yet in this milestone - positions crossing the undercollateralization frontier are flagged, but the multi-round spiral itself is not replayed. That is Milestone 2 (CascadeDetailTab), gated on capabilities.fork.",
+  "No full multi-round toxic-liquidation-spiral replay - positions crossing the undercollateralization frontier are flagged, but a chained sequence of many liquidations across many rounds is not replayed. Explicitly out of scope (docs/SCOPE.md §3), not a placeholder waiting on capabilities.fork - the two capabilities that genuinely needed the mainnet-fork tier (chained-liquidation before/after testing, and CappedRate cap-breach under real time progression) are real and shown on the Cascade detail tab.",
   "This comparison addresses liquidation-mechanism risk under genuine price shocks only, not collateral-integrity failures (bridge/oracle exploits) - see docs/SCOPE.md.",
   "MOCK MODE (web, Milestone 1): positions and protocol parameters below are synthetic fixtures baked by scripts/generate-mock-fixtures.ts for frontend development, computed with the real, tested engine (api/src/engine) but not sourced from chain and not the same fixture set app/api's demo uses. Swapped for a live api response once its routes exist - see lib/api/meta.ts.",
 ];
@@ -300,7 +299,7 @@ function buildMeta() {
     presets: Object.values(SHOCK_PRESETS),
     ucFrontier: ucFrontierTable(),
     limitations: LIMITATIONS,
-    capabilities: { rpc: true, fork: false },
+    capabilities: { rpc: true, fork: true },
   };
 }
 
