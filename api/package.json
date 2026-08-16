@@ -16,7 +16,8 @@
     "validate:aave": "tsx scripts/validate-aave.ts",
     "validate:aave-liquidation": "tsx scripts/validate-aave-liquidation.ts",
     "validate:fluid-liquidation": "tsx scripts/validate-fluid-liquidation.ts",
-    "sync:validation-results": "tsx scripts/sync-validation-results.ts"
+    "sync:validation-results": "tsx scripts/sync-validation-results.ts",
+    "sync:liquidation-profitability": "tsx scripts/sync-liquidation-profitability.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

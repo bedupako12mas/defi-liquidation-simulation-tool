@@ -1,5 +1,5 @@
 import type { Address as ViemAddress, PublicClient } from "viem";
-import { decodeAbiParameters, decodeFunctionResult, encodeFunctionData, parseAbi } from "viem";
+import { decodeAbiParameters, decodeFunctionResult, encodeFunctionData, keccak256, encodeAbiParameters, numberToHex, parseAbi } from "viem";
 import { buildFixedReturnBytecode } from "./stateOverride.js";
 import { probeTokenSlots } from "./slotProbe.js";
 import { healthFactor } from "../engine/healthFactor.js";
@@ -56,6 +56,15 @@ const LIQUIDATOR_IDENTITY = MULTICALL3_ADDRESS;
 // selector is reported as-is (below), never guessed at.
 const POOL_ERROR_NAMES: Record<string, string> = {
   "0x930bb771": "HealthFactorNotBelowThreshold (position's real on-chain HF wasn't actually below 1 at call time)",
+  // Identified during #43 (previously an unidentified selector reported honestly since
+  // #30 - docs/decisions.md): keccak256("MustNotLeaveDust()"), confirmed by exact match.
+  // Real Aave rule (found during earlier #38 scoping research, not yet implemented in
+  // computeExpectedMaxLiquidatableDebt above): a liquidation must fully clear debt, fully
+  // clear collateral, or leave >=$1,000 of both - this formula only implements the close-
+  // factor and collateral-availability caps, so at deep shock magnitudes it can compute a
+  // debtToCover that leaves a dust remainder the real contract rejects. Disclosed, not
+  // silently worked around - see #43's decisions.md entry for the real occurrence rate.
+  "0xb629b0e4": "MustNotLeaveDust (real Aave dust-avoidance rule, not yet modeled in computeExpectedMaxLiquidatableDebt)",
 };
 const ERROR_STRING_SELECTOR = "0x08c379a0"; // Error(string) - Aave's older require()-with-code reverts (e.g. "35")
 
@@ -167,6 +176,53 @@ export function computeExpectedMaxLiquidatableDebt(
   return (numerator * 10_000n + liquidationBonusRaw - 1n) / liquidationBonusRaw;
 }
 
+/**
+ * Shared by validateAaveLiquidation (via Multicall3) and estimateAaveLiquidationGas (direct
+ * estimateGas, no Multicall3 wrapper) - both need the identical price-feed + debt-token
+ * overrides, and building them twice risked the two functions silently drifting apart.
+ */
+async function buildAaveOverrides(
+  client: PublicClient,
+  oracle: ViemAddress,
+  oracleOverridePrices: Record<string, bigint>,
+  debtAsset: ViemAddress,
+  poolAddress: ViemAddress,
+  fundedAmount: bigint,
+): Promise<{ priceFeedOverrides: { address: ViemAddress; code: `0x${string}` }[]; tokenOverride: { address: ViemAddress; stateDiff: { slot: `0x${string}`; value: `0x${string}` }[] } } | null> {
+  const slots = await probeTokenSlots(client, debtAsset, LIQUIDATOR_IDENTITY, poolAddress);
+  if (!slots) return null;
+
+  const balanceSlot = keccak256(
+    encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [LIQUIDATOR_IDENTITY, BigInt(slots.balanceSlotIndex)]),
+  );
+  const ownerSlot = keccak256(
+    encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [LIQUIDATOR_IDENTITY, BigInt(slots.allowanceSlotIndex)]),
+  );
+  const allowanceSlot = keccak256(encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [poolAddress, ownerSlot]));
+
+  const priceFeedOverrides: { address: ViemAddress; code: `0x${string}` }[] = [];
+  for (const [asset, price] of Object.entries(oracleOverridePrices)) {
+    const source = await client.readContract({
+      address: oracle,
+      abi: ORACLE_SOURCE_ABI,
+      functionName: "getSourceOfAsset",
+      args: [asset as ViemAddress],
+    });
+    priceFeedOverrides.push({ address: source, code: buildFixedReturnBytecode(price) });
+  }
+
+  return {
+    priceFeedOverrides,
+    tokenOverride: {
+      address: debtAsset,
+      stateDiff: [
+        { slot: balanceSlot, value: numberToHex(fundedAmount, { size: 32 }) },
+        { slot: allowanceSlot, value: numberToHex(fundedAmount, { size: 32 }) },
+      ],
+    },
+  };
+}
+
 export interface ValidateAaveLiquidationParams {
   position: Position;
   shockedPrices: PriceVector;
@@ -211,26 +267,18 @@ export async function validateAaveLiquidation(
     return { status: "not-liquidatable", reason: "health-factor-above-one" };
   }
 
-  const slots = await probeTokenSlots(client, debtAsset, LIQUIDATOR_IDENTITY, poolAddress);
-  if (!slots) {
+  // Fund generously - large enough to cover any real debtToCover, an obviously-synthetic
+  // amount never mistaken for a real balance.
+  const fundedAmount = debtLeg.amount * 1000n + 10n ** 30n;
+
+  const overrides = await buildAaveOverrides(client, oracle, oracleOverridePrices, debtAsset, poolAddress, fundedAmount);
+  if (!overrides) {
     return {
       status: "unable-to-validate",
       reason: `Could not determine ${debtAsset}'s balance/allowance storage layout within the probed range`,
     };
   }
-
-  const { keccak256, encodeAbiParameters, numberToHex } = await import("viem");
-  const balanceSlot = keccak256(
-    encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [LIQUIDATOR_IDENTITY, BigInt(slots.balanceSlotIndex)]),
-  );
-  const ownerSlot = keccak256(
-    encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [LIQUIDATOR_IDENTITY, BigInt(slots.allowanceSlotIndex)]),
-  );
-  const allowanceSlot = keccak256(encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [poolAddress, ownerSlot]));
-
-  // Fund generously - large enough to cover any real debtToCover, an obviously-synthetic
-  // amount never mistaken for a real balance.
-  const fundedAmount = debtLeg.amount * 1000n + 10n ** 30n;
+  const { priceFeedOverrides, tokenOverride } = overrides;
 
   const balanceOfCalldata = (account: ViemAddress) =>
     encodeFunctionData({ abi: ERC20_BALANCE_ABI, functionName: "balanceOf", args: [account] });
@@ -248,32 +296,10 @@ export async function validateAaveLiquidation(
     { target: collateralAsset, allowFailure: false, callData: balanceOfCalldata(LIQUIDATOR_IDENTITY) }, // 3: collateral balance after
   ];
 
-  // Resolve each shocked asset's OWN feed contract - never override the shared oracle
-  // itself (see ORACLE_SOURCE_ABI's comment above).
-  const priceFeedOverrides: { address: ViemAddress; code: `0x${string}` }[] = [];
-  for (const [asset, price] of Object.entries(oracleOverridePrices)) {
-    const source = await client.readContract({
-      address: oracle,
-      abi: ORACLE_SOURCE_ABI,
-      functionName: "getSourceOfAsset",
-      args: [asset as ViemAddress],
-    });
-    priceFeedOverrides.push({ address: source, code: buildFixedReturnBytecode(price) });
-  }
-
   const raw = await client.call({
     to: MULTICALL3_ADDRESS,
     data: encodeFunctionData({ abi: MULTICALL3_ABI, functionName: "aggregate3", args: [calls] }),
-    stateOverride: [
-      ...priceFeedOverrides,
-      {
-        address: debtAsset,
-        stateDiff: [
-          { slot: balanceSlot, value: numberToHex(fundedAmount, { size: 32 }) },
-          { slot: allowanceSlot, value: numberToHex(fundedAmount, { size: 32 }) },
-        ],
-      },
-    ],
+    stateOverride: [...priceFeedOverrides, tokenOverride],
   });
 
   if (!raw.data) {
@@ -306,4 +332,78 @@ export async function validateAaveLiquidation(
     actualCollateralSeized,
     matchesExpectation: actualDebtRepaid === expectedDebtRepaid,
   };
+}
+
+export interface EstimateAaveLiquidationGasParams {
+  position: Position;
+  oracleOverridePrices: Record<string, bigint>;
+  collateralAsset: ViemAddress;
+  debtAsset: ViemAddress;
+  debtToCover: bigint;
+  oracle: ViemAddress;
+}
+
+export type EstimateAaveGasResult = { status: "estimated"; gasUsed: bigint } | { status: "unable-to-estimate"; reason: string };
+
+/**
+ * #43: a REAL eth_estimateGas for liquidationCall() - deliberately NOT routed through
+ * Multicall3 (unlike validateAaveLiquidation's correctness check), since a real liquidator
+ * bot calls the Pool directly and Multicall3's own call overhead would inflate the number.
+ * Reuses the identical price-feed + debt-token overrides validateAaveLiquidation builds,
+ * via the shared buildAaveOverrides helper, so the two never silently diverge.
+ */
+export async function estimateAaveLiquidationGas(
+  client: PublicClient,
+  poolAddress: ViemAddress,
+  params: EstimateAaveLiquidationGasParams,
+): Promise<EstimateAaveGasResult> {
+  const { position, oracleOverridePrices, collateralAsset, debtAsset, debtToCover, oracle } = params;
+
+  const fundedAmount = debtToCover * 1000n + 10n ** 30n;
+  const overrides = await buildAaveOverrides(client, oracle, oracleOverridePrices, debtAsset, poolAddress, fundedAmount);
+  if (!overrides) {
+    return { status: "unable-to-estimate", reason: `Could not determine ${debtAsset}'s balance/allowance storage layout` };
+  }
+  const { priceFeedOverrides, tokenOverride } = overrides;
+
+  const liquidationCalldata = encodeFunctionData({
+    abi: POOL_ABI,
+    functionName: "liquidationCall",
+    args: [collateralAsset, debtAsset, position.user as ViemAddress, debtToCover, false],
+  });
+
+  try {
+    const gasUsed = await client.estimateGas({
+      account: LIQUIDATOR_IDENTITY,
+      to: poolAddress,
+      data: liquidationCalldata,
+      stateOverride: [...priceFeedOverrides, tokenOverride],
+    });
+    return { status: "estimated", gasUsed };
+  } catch (err) {
+    // Same real gap fluidValidator.ts's extractRevertData exists to close - viem's
+    // estimateGas error nests the raw revert bytes at varying depths, and the top-level
+    // .message alone ("Execution reverted for an unknown reason") hides the actual reason
+    // (a real Aave custom error, or Error(string)) that would otherwise be decodable.
+    const data = extractRevertDataFromError(err);
+    const reason = data ? decodeAaveRevert(data) : err instanceof Error ? err.message.split("\n")[0]! : String(err);
+    return { status: "unable-to-estimate", reason };
+  }
+}
+
+function extractRevertDataFromError(err: unknown): `0x${string}` | undefined {
+  if (typeof err !== "object" || err === null) return undefined;
+  let current: unknown = err;
+  for (let i = 0; i < 6 && current; i++) {
+    if (typeof current === "object" && current !== null) {
+      const obj = current as Record<string, unknown>;
+      if (typeof obj.data === "string" && obj.data.startsWith("0x") && obj.data.length > 2) {
+        return obj.data as `0x${string}`;
+      }
+      current = obj.cause;
+    } else {
+      break;
+    }
+  }
+  return undefined;
 }

@@ -9,6 +9,7 @@ import { registerSimulateRoute } from "./routes/simulate.js";
 import { registerPositionsRoute } from "./routes/positions.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.js";
 import { registerValidationResultsRoutes } from "./routes/validationResults.js";
+import { registerLiquidationProfitabilityRoutes } from "./routes/liquidationProfitability.js";
 
 const app = Fastify({ logger: true });
 
@@ -56,6 +57,7 @@ registerSimulateRoute(app, { db, client: publicClient, allowedOrigins });
 registerPositionsRoute(app, { db, client: publicClient });
 registerAnalyticsRoutes(app, { db, client: publicClient });
 registerValidationResultsRoutes(app, { db });
+registerLiquidationProfitabilityRoutes(app, { db });
 
 app.get("/health", async () => ({ ok: true }));
 

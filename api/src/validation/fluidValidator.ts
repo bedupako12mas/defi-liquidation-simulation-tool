@@ -1,6 +1,14 @@
 import type { Address as ViemAddress, PublicClient } from "viem";
-import { parseAbi, encodeFunctionData, decodeErrorResult, numberToHex } from "viem";
+import { parseAbi, encodeFunctionData, decodeErrorResult, numberToHex, keccak256, encodeAbiParameters } from "viem";
 import { buildFixedReturnBytecode, buildFixedTupleReturnBytecode } from "./stateOverride.js";
+import { probeTokenSlots } from "./slotProbe.js";
+
+// Same real, canonical Multicall3 as aaveValidator.ts (confirmed real deployed code this
+// session, docs/decisions.md's #30 entry) - used here as both caller and to_ for #43's real
+// gas-estimation call, matching the exact combination confirmed live to succeed (real,
+// decoded, non-reverting (actualDebtAmt_, actualColAmt_) return - see docs/decisions.md's
+// #43 scoping entry).
+const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11" as const;
 
 // Confirmed live against 44 of 95 real unique vault oracles this session (docs/decisions.md
 // #30 entry) - a vault's Configs.oracle is a FluidGenericOracle combining up to 5 "hops"
@@ -243,6 +251,112 @@ export async function validateFluidLiquidation(
       return { status: "unexpected-revert", rawError: `${fallback.errorName}(${fallback.args?.join(", ") ?? ""})` };
     } catch {
       return { status: "unexpected-revert", rawError: data };
+    }
+  }
+}
+
+export interface EstimateFluidLiquidationGasParams {
+  vault: ViemAddress;
+  oracle: ViemAddress;
+  /** ConstantViews.borrowToken (fluidVaultConfig.ts) - the real debt token, needed to fund
+   *  a real (non-dry-run) call. Deliberately NOT ConstantViews.liquidity - see #43's
+   *  confirmed-live finding, docs/decisions.md. */
+  borrowToken: ViemAddress;
+  overrideValue: bigint;
+  priceComponent: "market" | "internal-exchange-rate";
+  debtAmt: bigint;
+}
+
+export type EstimateFluidGasResult =
+  | { status: "estimated"; gasUsed: bigint }
+  | { status: "not-applicable"; reason: string }
+  | { status: "unable-to-estimate"; reason: string };
+
+/**
+ * #43: a REAL eth_estimateGas for liquidate() - genuinely different from
+ * validateFluidLiquidation's correctness check, which deliberately calls with
+ * to_=0x000...dEaD so it always reverts (its dry-run trick). estimateGas has no valid
+ * answer for a call with no successful execution path, so this uses a real to_ and real
+ * funding instead - confirmed live this session (docs/decisions.md's #43 scoping entry):
+ * the vault itself (not ConstantViews.liquidity) is the real ERC20 spender, and
+ * absorb_=false alone succeeds (confirming genuine liquidator-repays economics, not
+ * protocol-level bad-debt absorption).
+ */
+export async function estimateFluidLiquidationGas(
+  client: PublicClient,
+  params: EstimateFluidLiquidationGasParams,
+): Promise<EstimateFluidGasResult> {
+  const { vault, oracle, borrowToken, overrideValue, priceComponent, debtAmt } = params;
+
+  const resolution = await resolveFluidOverrideTarget(client, oracle, priceComponent);
+  if (resolution.status === "not-applicable") return resolution;
+  if (resolution.status === "unable-to-validate") return { status: "unable-to-estimate", reason: resolution.reason };
+
+  let priceOverride: NonNullable<Parameters<typeof client.estimateGas>[0]["stateOverride"]>[number];
+  if (resolution.stubKind === "chainlink-tuple") {
+    priceOverride = { address: resolution.overrideAddress, code: buildFixedTupleReturnBytecode([0n, overrideValue, 0n, 0n, 0n]) };
+  } else {
+    const currentSlot0 = BigInt((await client.getStorageAt({ address: resolution.overrideAddress, slot: SLOT0_KEY }))!);
+    const newSlot0 = (currentSlot0 & ~SLOT0_RATE_MASK) | (overrideValue & SLOT0_RATE_MASK);
+    priceOverride = { address: resolution.overrideAddress, stateDiff: [{ slot: SLOT0_KEY, value: numberToHex(newSlot0, { size: 32 }) }] };
+  }
+
+  const slots = await probeTokenSlots(client, borrowToken, MULTICALL3_ADDRESS, vault);
+  if (!slots) {
+    return { status: "unable-to-estimate", reason: `Could not determine ${borrowToken}'s balance/allowance storage layout` };
+  }
+
+  const fundedAmount = debtAmt * 1000n + 10n ** 30n;
+  const balanceSlot = keccak256(
+    encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [MULTICALL3_ADDRESS, BigInt(slots.balanceSlotIndex)]),
+  );
+  const ownerSlot = keccak256(
+    encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [MULTICALL3_ADDRESS, BigInt(slots.allowanceSlotIndex)]),
+  );
+  // Allowance granted to the VAULT itself, not ConstantViews.liquidity - the real, confirmed
+  // funding recipe (see this function's own doc comment).
+  const allowanceSlot = keccak256(encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [vault, ownerSlot]));
+
+  const tokenOverride = {
+    address: borrowToken,
+    stateDiff: [
+      { slot: balanceSlot, value: numberToHex(fundedAmount, { size: 32 }) },
+      { slot: allowanceSlot, value: numberToHex(fundedAmount, { size: 32 }) },
+    ],
+  };
+
+  const liquidateCalldata = encodeFunctionData({
+    abi: LIQUIDATE_ABI,
+    functionName: "liquidate",
+    args: [debtAmt, 0n, MULTICALL3_ADDRESS, false],
+  });
+
+  try {
+    const gasUsed = await client.estimateGas({
+      account: MULTICALL3_ADDRESS,
+      to: vault,
+      data: liquidateCalldata,
+      stateOverride: [priceOverride, tokenOverride],
+    });
+    return { status: "estimated", gasUsed };
+  } catch (err) {
+    // Same real gap as aaveValidator.ts's identical fix - viem's estimateGas error hides
+    // the actual revert reason behind a generic top-level message unless the raw bytes are
+    // extracted and decoded, same as validateFluidLiquidation already does for `call`.
+    const data = extractRevertData(err);
+    if (!data) {
+      return { status: "unable-to-estimate", reason: err instanceof Error ? err.message.split("\n")[0]! : String(err) };
+    }
+    try {
+      const decoded = decodeErrorResult({ abi: LIQUIDATE_ABI, data });
+      if (decoded.errorName === "FluidVaultError") {
+        const [errorId] = decoded.args as readonly [bigint];
+        const name = VAULT_ERROR_NAMES[Number(errorId)] ?? `unrecognized errorId ${errorId}`;
+        return { status: "unable-to-estimate", reason: `FluidVaultError: ${name}` };
+      }
+      return { status: "unable-to-estimate", reason: `${decoded.errorName}(${decoded.args?.join(", ") ?? ""})` };
+    } catch {
+      return { status: "unable-to-estimate", reason: data };
     }
   }
 }

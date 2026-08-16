@@ -73,6 +73,30 @@ export interface ValidationResultsTable {
   created_at: ColumnType<Date, string | undefined, never>;
 }
 
+/** Written by scripts/sync-liquidation-profitability.ts (#43) - one row per (position,
+ *  magnitude tested), same granularity as validation_results, so the real breakeven
+ *  magnitude (first magnitude where a real liquidator's gas cost is actually covered by
+ *  the real bonus) can be derived from stored rows rather than collapsed to one number. */
+export interface LiquidationProfitabilityTable {
+  id: Generated<number>;
+  protocol: "aave" | "fluid";
+  position_id: string;
+  preset_id: string;
+  magnitude_pct: Numeric;
+  gas_used: ColumnType<string | null, string | bigint | null | undefined, string | null>;
+  /** 8-decimal fixed-point USD, same convention as protocol_params.price_usd8 - exact
+   *  integer math throughout, not floats. */
+  gas_cost_usd8: ColumnType<string | null, string | bigint | null | undefined, string | null>;
+  debt_cleared_usd8: ColumnType<string | null, string | bigint | null | undefined, string | null>;
+  bonus_value_usd8: ColumnType<string | null, string | bigint | null | undefined, string | null>;
+  net_profit_usd8: ColumnType<string | null, string | bigint | null | undefined, string | null>;
+  /** "profitable" | "unprofitable" | "unable-to-estimate-gas" | "unable-to-validate" - its
+   *  own vocabulary, deliberately distinct from validation_results.status. */
+  status: string;
+  detail: string | null;
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
 export interface DB {
   snapshots: SnapshotsTable;
   indexer_progress: IndexerProgressTable;
@@ -80,4 +104,5 @@ export interface DB {
   positions: PositionsTable;
   protocol_params: ProtocolParamsTable;
   validation_results: ValidationResultsTable;
+  liquidation_profitability: LiquidationProfitabilityTable;
 }

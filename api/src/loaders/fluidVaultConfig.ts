@@ -23,6 +23,14 @@ const VAULT_ENTIRE_DATA_ABI = parseAbi([
 
 export interface FluidVaultConfig {
   vault: `0x${string}`;
+  /** ConstantViews.liquidity - Fluid's real, shared core Liquidity module every vault
+   *  routes through internally. NOT the address to grant a real (non-dry-run) liquidate()
+   *  call's debt-token allowance to, despite being the natural first guess - #43's real,
+   *  confirmed-live finding (docs/decisions.md) is that the VAULT itself is the real ERC20
+   *  spender for that flow, not this address. Surfaced here anyway since it's already
+   *  fetched by getVaultsEntireData() at zero extra RPC cost, and is genuinely the real
+   *  core-module address for anything that does need it. */
+  liquidity: `0x${string}`;
   supplyToken: `0x${string}`;
   borrowToken: `0x${string}`;
   supplyDecimals: number;
@@ -65,6 +73,7 @@ export async function loadFluidVaultConfigs(client: PublicClient): Promise<Fluid
 
   return vaultsData.map((v) => ({
     vault: v.vault,
+    liquidity: v.constantVariables.liquidity,
     supplyToken: v.constantVariables.supplyToken,
     borrowToken: v.constantVariables.borrowToken,
     supplyDecimals: v.constantVariables.supplyDecimals,
