@@ -13,7 +13,10 @@ describe("CascadeDetailTab", () => {
     expect(screen.getAllByText("Liquidated").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Swept").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Success").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Protection disabled").length).toBeGreaterThan(0);
+    // "Protection disabled" was a misleading first label - avoidForcedLiquidationsCol_=false
+    // is the deliberate, protective default (real vault deployments ship this way, confirmed
+    // against real source + team review), not a gap. Relabeled to say what actually happens.
+    expect(screen.getAllByText("Liquidates on depeg (default)").length).toBeGreaterThan(0);
   });
 
   it("does not claim to be a Milestone-2 stub", async () => {

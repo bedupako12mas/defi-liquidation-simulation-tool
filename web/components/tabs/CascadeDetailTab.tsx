@@ -39,7 +39,11 @@ const TX_STATUS_TAG: Record<string, { label: string; className: string }> = {
 };
 
 const VERDICT_TAG: Record<string, { label: string; className: string }> = {
-  "protection-disabled": { label: "Protection disabled", className: "tag-illustrative" },
+  // Real, team-confirmed correction: avoidForcedLiquidationsCol_=false is the deliberate,
+  // protective DEFAULT (favors real liquidation over accumulating bad debt trusting a peg
+  // recovery), not a gap - real vault deployments are constructed this way. Labeled/colored
+  // to match: this is the expected, safe outcome for a false-flagged vault, not a warning.
+  "protection-disabled": { label: "Liquidates on depeg (default)", className: "tag-healthy" },
   "clamped-as-designed": { label: "Clamped as designed", className: "tag-healthy" },
   "unclamped-beyond-bound": { label: "Unclamped beyond bound", className: "tag-toxic" },
 };
@@ -124,7 +128,7 @@ function CappedRateBreachTable({ rows }: { rows: CappedRateBreachResult[] }) {
           <tr>
             <th>Vault</th>
             <th>Real heartbeat</th>
-            <th>Down-cap enabled?</th>
+            <th>Peg-trust mode</th>
             <th>Configured max down</th>
             <th>Real measured drop</th>
             <th>Verdict</th>
@@ -136,8 +140,11 @@ function CappedRateBreachTable({ rows }: { rows: CappedRateBreachResult[] }) {
               <td><code>{shortenAddress(r.vault)}</code></td>
               <td className="num">{formatHeartbeat(r.minHeartbeatSeconds)}</td>
               <td>
-                <span className={`tag ${r.avoidForcedLiquidationsCol ? "tag-healthy" : "tag-illustrative"}`}>
-                  {r.avoidForcedLiquidationsCol ? "Yes" : "No"}
+                {/* Neither state is inherently "good" or "bad" - a real, deliberate
+                    per-asset risk configuration, not a pass/fail check - so both use the
+                    same neutral, informational tag color. */}
+                <span className="tag tag-cited">
+                  {r.avoidForcedLiquidationsCol ? "Trust peg (accepts bad debt)" : "Liquidate on depeg (default)"}
                 </span>
               </td>
               <td className="num">{formatSixDecimalPct(r.maxDownFromMaxReachedPctCol)}</td>
@@ -239,10 +246,13 @@ export function CascadeDetailTab() {
           <InfoTooltip label="What this section checks">
             <strong>Plain language:</strong> Fluid&apos;s LST-tracking price feeds are
             deliberately &ldquo;stale on purpose&rdquo; - they only re-check the real
-            underlying rate periodically (a real &ldquo;heartbeat&rdquo;), and are supposed to
-            clamp a too-extreme move when they do. This checks whether that clamp genuinely
-            holds, for real, on a real currently-fresh vault - the real mechanism behind the
-            March 2026 Resolv exploit (~$21M bad debt).
+            underlying rate periodically (a real &ldquo;heartbeat&rdquo;). On some assets the
+            protocol chooses to hold the old rate through a depeg and trust it recovers
+            (accepting temporary bad debt); on others it chooses to let the real crashed rate
+            through immediately and liquidate for real instead. This checks which behavior a
+            real, currently-fresh vault actually exhibits once its heartbeat genuinely
+            elapses - the real mechanism behind the March 2026 Resolv exploit (~$21M bad
+            debt), where that choice mattered.
             <br />
             <br />
             <strong>Technical:</strong> <code>getExchangeRateLiquidate()</code> only re-reads
@@ -252,21 +262,30 @@ export function CascadeDetailTab() {
             move real time forward. The raw source&apos;s bytecode is persistently overridden
             to an extreme value, confirmed to have zero effect immediately after (proving the
             staleness is real), then <code>anvil_mine</code> genuinely advances{" "}
-            <code>block.timestamp</code> past the real heartbeat before re-checking.
-            Down-capping is additionally gated by a separate admin-set flag
-            (<code>avoidForcedLiquidationsCol_</code>), independent of the numeric bound - an
-            earlier draft of this test discarded that flag and reported a misleadingly
-            reassuring verdict from the numeric bound alone.
+            <code>block.timestamp</code> past the real heartbeat before re-checking. Whether
+            down-capping applies at all is gated by a separate, real, per-asset,
+            guardian/governance-flippable flag (<code>avoidForcedLiquidationsCol_</code>) -
+            true means the vault trusts the peg and holds the capped rate through a depeg
+            (bad-debt-tolerant); false means it lets the real rate through and liquidates
+            (bad-debt-avoidant) - confirmed against real Fluid source and team review that
+            false is the deliberate default new vault deployments ship with, reserved for
+            assets NOT considered safe to assume a temporary depeg on.
           </InfoTooltip>
         </h2>
         <p className="preset-note" style={{ marginTop: 0 }}>
-          A real, decisive, protocol-wide finding: every currently-fresh CappedRate vault
-          checked has collateral-side down-cap protection administratively disabled - not a
-          code bug, a real configuration state, meaning an extreme raw-source crash currently
-          propagates through <code>getExchangeRateLiquidate()</code> completely unclamped for
-          these vaults. Raw before/after rate values are in each CappedRate&apos;s own native
-          scale (not directly USD-convertible without additional context) - the real,
-          verified drop is the % column.
+          A real, decisive, protocol-wide finding, confirmed against real Fluid source and
+          team review: every currently-fresh CappedRate vault checked has{" "}
+          <code>avoidForcedLiquidationsCol_ = false</code> - the deliberate, protective
+          default (real vault deployments are constructed this way), not a gap. It means an
+          extreme raw-source crash propagates through{" "}
+          <code>getExchangeRateLiquidate()</code> immediately and unclamped for these vaults -
+          by design, so a real depeg triggers real liquidation rather than the protocol
+          quietly accumulating bad debt trusting a recovery that might not come. Whether any
+          specific asset&apos;s risk profile warrants flipping this to true is a real
+          governance/risk decision, not something this check flags as broken. Raw before/after
+          rate values are in each CappedRate&apos;s own native scale (not directly
+          USD-convertible without additional context) - the real, verified drop is the %
+          column.
         </p>
         {breachError && <div className="banner">Error talking to the API: {breachError}.</div>}
         {breach === null && !breachError ? <p className="loading">Loading...</p> : <CappedRateBreachTable rows={breach ?? []} />}
