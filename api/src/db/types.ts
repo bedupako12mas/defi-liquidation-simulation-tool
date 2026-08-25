@@ -155,6 +155,28 @@ export interface CappedRateBreachResultsTable {
   created_at: ColumnType<Date, string | undefined, never>;
 }
 
+// Deploy 1/6 (Fluid T2 - RPC tier). Pool-level, not vault-share - see
+// migrations/0008_fluid_t2_shock_results.ts's top comment for the disclosed limitation.
+export interface FluidT2ShockResultsTable {
+  id: Generated<number>;
+  vault: string;
+  collateral_dex: string;
+  token0: string;
+  token1: string;
+  token0_decimals: number;
+  token1_decimals: number;
+  debt_token: string;
+  debt_decimals: number;
+  preset_id: string;
+  magnitude_pct: Numeric;
+  pool_value_usd8: Numeric;
+  pool_value_usd8_baseline: Numeric;
+  vault_collateral_value_usd8: Numeric;
+  vault_debt_value_usd8: Numeric;
+  liquidatable: boolean;
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
 export interface DB {
   snapshots: SnapshotsTable;
   indexer_progress: IndexerProgressTable;
@@ -165,4 +187,5 @@ export interface DB {
   liquidation_profitability: LiquidationProfitabilityTable;
   chained_liquidation_results: ChainedLiquidationResultsTable;
   capped_rate_breach_results: CappedRateBreachResultsTable;
+  fluid_t2_shock_results: FluidT2ShockResultsTable;
 }

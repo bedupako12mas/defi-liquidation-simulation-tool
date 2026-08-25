@@ -73,6 +73,10 @@ npm-debug.log*
 trivy-results.*
 gitleaks-report.*
 
+# graphify's generated knowledge-graph output (graph.html/graph.json/GRAPH_REPORT.md) -
+# regenerable local tooling artifact, not source or documentation to track.
+graphify-out/
+
 # Local-only working docs - never pushed. See ../Liquidation Mechanisms/docs/ for the full
 # scope/research archive (context.md, SCOPE.md, fundamentals/, study-guide/) - kept private
 # there deliberately, not duplicated here.
