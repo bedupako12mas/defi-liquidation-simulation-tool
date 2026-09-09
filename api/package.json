@@ -13,6 +13,7 @@
     "migrate": "tsx scripts/migrate.ts",
     "migrate:down": "tsx scripts/migrate.ts down",
     "index:aave": "tsx scripts/index-aave.ts",
+    "index:aave-v4": "tsx scripts/index-aave-v4.ts",
     "validate:aave": "tsx scripts/validate-aave.ts",
     "validate:aave-liquidation": "tsx scripts/validate-aave-liquidation.ts",
     "validate:fluid-liquidation": "tsx scripts/validate-fluid-liquidation.ts",

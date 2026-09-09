@@ -7,8 +7,9 @@ async function main() {
   await assertAllowedChain();
 
   // Same real, live-confirmed free-tier eth_getLogs cap as the V3 indexer - see
-  // docs/decisions.md's 2026-09-08 entry. Default here already reflects that lesson
-  // (aaveV4BorrowDiscovery.ts's own MIN_CHUNK_SIZE=10), but still overridable.
+  // docs/decisions.md's 2026-09-10 entry. aaveV4BorrowDiscovery.ts's own DEFAULT_CHUNK_SIZE
+  // is now 10 (the confirmed real cap), so this override is only needed to go smaller/larger
+  // for a specific run - a caller no longer has to already know the provider's limit.
   const chunkSize = process.env.AAVE_V4_INDEXER_CHUNK_SIZE
     ? BigInt(process.env.AAVE_V4_INDEXER_CHUNK_SIZE)
     : undefined;

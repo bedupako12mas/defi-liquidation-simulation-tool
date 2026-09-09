@@ -25,11 +25,18 @@ export interface DiscoverAaveV4BorrowCandidatesParams {
   onChunkScanned?: (chunkCandidates: AaveV4BorrowCandidate[], scannedThroughBlock: bigint) => Promise<void> | void;
 }
 
-const DEFAULT_CHUNK_SIZE = 5000n;
-const MIN_CHUNK_SIZE = 10n; // real, live-confirmed floor for this RPC's free tier - see
-// docs/decisions.md's 2026-09-08 entry: the V3 indexer's own MIN_CHUNK_SIZE=50 backed off to
-// a floor still ABOVE the provider's real 10-block eth_getLogs cap and crashed outright.
-// Fixed here from the start rather than rediscovering the same failure a second time.
+// Real, live-confirmed (2026-09-10, probe-rate-limit-message.ts): this RPC's free tier
+// caps eth_getLogs at EXACTLY 10 blocks. Starting at 5000 and letting the halving loop
+// below find its way down still cost ~9 levels of splitting (5000->2500->...->10) - up
+// to ~1000 sequential leaf calls PER logical chunk, all before the real candidate scan
+// even begins, and the resulting call volume was enough to trigger genuine rate-limit
+// errors that then looked like a stuck retry loop (indexer_progress never advanced,
+// even after 30+ backoff cycles). Starting AT the real cap avoids the splitting cascade
+// entirely rather than discovering it empirically every run - the index-aave-v4.ts
+// AAVE_V4_INDEXER_CHUNK_SIZE override existed as a workaround for exactly this, but a
+// safe default shouldn't require a caller to already know the provider's real limit.
+const DEFAULT_CHUNK_SIZE = 10n;
+const MIN_CHUNK_SIZE = 10n;
 
 export async function discoverAaveV4BorrowCandidates(
   client: PublicClient,
