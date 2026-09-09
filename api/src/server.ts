@@ -12,6 +12,9 @@ import { registerValidationResultsRoutes } from "./routes/validationResults.js";
 import { registerLiquidationProfitabilityRoutes } from "./routes/liquidationProfitability.js";
 import { registerChainedLiquidationRoutes } from "./routes/chainedLiquidation.js";
 import { registerCappedRateBreachRoutes } from "./routes/cappedRateBreach.js";
+import { registerFluidT2ShockRoutes } from "./routes/fluidT2Shock.js";
+import { registerFluidT3ShockRoutes } from "./routes/fluidT3Shock.js";
+import { registerFluidT4ShockRoutes } from "./routes/fluidT4Shock.js";
 
 const app = Fastify({ logger: true });
 
@@ -62,6 +65,9 @@ registerValidationResultsRoutes(app, { db });
 registerLiquidationProfitabilityRoutes(app, { db });
 registerChainedLiquidationRoutes(app, { db });
 registerCappedRateBreachRoutes(app, { db });
+registerFluidT2ShockRoutes(app, { db });
+registerFluidT3ShockRoutes(app, { db });
+registerFluidT4ShockRoutes(app, { db });
 
 app.get("/health", async () => ({ ok: true }));
 
