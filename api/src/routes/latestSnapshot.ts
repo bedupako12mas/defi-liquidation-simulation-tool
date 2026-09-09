@@ -119,6 +119,60 @@ export async function loadLatestFluidSnapshot(db: Kysely<DB>): Promise<LoadedSna
   return { snapshotId: snapshot.id, pinnedBlock: snapshot.pinned_block, positions, basePrices };
 }
 
+/**
+ * Same shape as loadLatestAaveSnapshot, filtered to protocol='aave-v4'. Real V4 position ids
+ * are `aave-v4-<spoke>-<user>` (regenerated the same way Fluid's id is - not stored directly
+ * - see aaveV4UserEnrichment.ts's write-time format). A user's position is per-Spoke (V4's
+ * real account model - each Spoke is its own isolated health-factor domain), so a single
+ * user_address can legitimately produce multiple real position rows here.
+ */
+export async function loadLatestAaveV4Snapshot(db: Kysely<DB>): Promise<LoadedSnapshot | null> {
+  const snapshot = await db
+    .selectFrom("snapshots")
+    .selectAll()
+    .where("protocol", "=", "aave-v4")
+    .orderBy("id", "desc")
+    .limit(1)
+    .executeTakeFirst();
+
+  if (!snapshot) return null;
+
+  const [positionRows, paramRows] = await Promise.all([
+    db.selectFrom("positions").selectAll().where("snapshot_id", "=", snapshot.id).execute(),
+    db.selectFrom("protocol_params").selectAll().where("snapshot_id", "=", snapshot.id).execute(),
+  ]);
+
+  const positions: Position[] = [];
+  let skippedPositions = 0;
+
+  for (const row of positionRows) {
+    try {
+      if (row.aave_v4_spoke === null) {
+        throw new Error("aave_v4_spoke missing on an aave-v4-protocol row");
+      }
+      positions.push({
+        id: `aave-v4-${row.aave_v4_spoke}-${row.user_address.toLowerCase()}`,
+        protocol: "aave-v4",
+        user: row.user_address,
+        collateral: parseBigintLegs<CollateralLeg>(row.collateral),
+        debt: parseBigintLegs<DebtLeg>(row.debt),
+        liquidationIncentiveBps: BigInt(row.liquidation_incentive_bps),
+      });
+    } catch (err) {
+      skippedPositions++;
+      console.warn(`[latestSnapshot] skipped malformed aave-v4 position row (id=${row.id}):`, redactError(err));
+    }
+  }
+
+  if (skippedPositions > 0) {
+    console.warn(`[latestSnapshot] ${skippedPositions} of ${positionRows.length} aave-v4 position rows skipped`);
+  }
+
+  const basePrices: PriceVector = Object.fromEntries(paramRows.map((p) => [p.asset, BigInt(p.price_usd8)]));
+
+  return { snapshotId: snapshot.id, pinnedBlock: snapshot.pinned_block, positions, basePrices };
+}
+
 /** Reverses syncAaveSnapshot.ts's JSON.stringify(legs, bigIntReplacer) - amount and, for
  *  collateral, liquidationThresholdBps come back as strings and are parsed to bigint here.
  *  Skips (and logs) an individual malformed leg rather than failing the whole array - the

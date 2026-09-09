@@ -26,7 +26,7 @@ export interface CollateralLeg extends AssetAmount {
 
 export type DebtLeg = AssetAmount;
 
-export type Protocol = "aave" | "fluid";
+export type Protocol = "aave" | "fluid" | "aave-v4";
 
 export interface Position {
   id: string;
@@ -36,8 +36,17 @@ export interface Position {
   debt: DebtLeg[];
   /**
    * `i` in the toxic-liquidation formula (Warmuz, Chaudhary & Pinna, arXiv:2212.07306).
-   * Aave calls this the liquidation bonus (stored on-chain as e.g. 10500 = 105%,
+   * Aave V3 calls this the liquidation bonus (stored on-chain as e.g. 10500 = 105%,
    * i.e. a 5% bonus - here we store the bonus itself: 500n). Basis points.
+   *
+   * Aave V4 real, disclosed wrinkle: V4's real bonus is NOT a fixed reserve constant - it's
+   * a Dutch-auction curve (ISpoke.getLiquidationBonus(reserveId, user, healthFactor), real
+   * function, confirmed live) that scales with how far below 1.0 health factor actually is.
+   * For a V4 Position this field holds a real, live snapshot (the bonus AT the user's real
+   * current health factor, at sync time) - not a protocol constant. Under a shocked/
+   * hypothetical health factor the real bonus would differ; the toxic-liquidation/
+   * undercollateralization-frontier formulas that consume this field were designed for a
+   * fixed-bonus protocol and are a real, disclosed approximation for V4, not an exact match.
    */
   liquidationIncentiveBps: bigint;
 }

@@ -9,7 +9,7 @@ import type { Position, PriceVector, Protocol } from "../engine/types.js";
 import { getCachedReserveConfigs } from "./reserveConfigCache.js";
 import { classifyForShock } from "./aaveShockClassification.js";
 import { classifyFluidAssets } from "./fluidShockClassification.js";
-import { loadLatestAaveSnapshot, loadLatestFluidSnapshot } from "./latestSnapshot.js";
+import { loadLatestAaveSnapshot, loadLatestFluidSnapshot, loadLatestAaveV4Snapshot } from "./latestSnapshot.js";
 
 const USD8 = 100_000_000;
 
@@ -75,8 +75,8 @@ export function registerPositionsRoute(app: FastifyInstance, deps: { db: Kysely<
     async (request: FastifyRequest<{ Querystring: PositionsQuery }>, reply) => {
       const { presetId, magnitudePct, protocol } = request.query;
 
-      if (protocol !== "aave" && protocol !== "fluid") {
-        reply.code(400).send({ error: `Unknown protocol "${protocol}". Valid: aave, fluid.` });
+      if (protocol !== "aave" && protocol !== "fluid" && protocol !== "aave-v4") {
+        reply.code(400).send({ error: `Unknown protocol "${protocol}". Valid: aave, fluid, aave-v4.` });
         return;
       }
 
@@ -106,14 +106,29 @@ export function registerPositionsRoute(app: FastifyInstance, deps: { db: Kysely<
         return snapshot.positions.map((position) => toPositionSnapshot(position, prices, "aave"));
       }
 
-      // protocol === "fluid"
-      const snapshot = await loadLatestFluidSnapshot(deps.db);
-      if (!snapshot) return []; // real answer, not an error - no Fluid snapshot synced yet
+      if (protocol === "fluid") {
+        const snapshot = await loadLatestFluidSnapshot(deps.db);
+        if (!snapshot) return []; // real answer, not an error - no Fluid snapshot synced yet
+
+        const assetConfig = classifyFluidAssets(snapshot.positions, reserveConfigs);
+        const prices = applyShock(snapshot.basePrices, assetConfig, magnitude / 100, preset);
+
+        return snapshot.positions.map((position) => toPositionSnapshot(position, prices, "fluid"));
+      }
+
+      // protocol === "aave-v4". Real V4 assets substantially overlap Aave V3's own reserve
+      // list (WETH/WBTC/USDC/USDT/etc - confirmed live) but also include V4-only assets no
+      // V3 reserve lists at all (PT-tokens, XAUt, EURC, sUSDe-family - see
+      // docs/decisions.md's 2026-09-08 entries) - classifyFluidAssets's own "fall back to
+      // UNKNOWN, never guess" behavior is exactly right here too, reused unmodified rather
+      // than duplicated under a new name.
+      const snapshot = await loadLatestAaveV4Snapshot(deps.db);
+      if (!snapshot) return []; // real answer, not an error - no Aave V4 snapshot synced yet
 
       const assetConfig = classifyFluidAssets(snapshot.positions, reserveConfigs);
       const prices = applyShock(snapshot.basePrices, assetConfig, magnitude / 100, preset);
 
-      return snapshot.positions.map((position) => toPositionSnapshot(position, prices, "fluid"));
+      return snapshot.positions.map((position) => toPositionSnapshot(position, prices, "aave-v4"));
     },
   );
 }
