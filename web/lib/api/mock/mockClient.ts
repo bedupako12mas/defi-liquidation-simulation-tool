@@ -13,6 +13,9 @@ import type { ValidationProtocol, ValidationResult } from "../validation";
 import type { ProfitabilityProtocol, LiquidationProfitability } from "../profitability";
 import type { ChainedProtocol, ChainedLiquidationResult } from "../chainedLiquidation";
 import type { CappedRateBreachResult } from "../cappedRateBreach";
+import type { FluidT2ShockResult } from "../fluidT2Shock";
+import type { FluidT3ShockResult } from "../fluidT3Shock";
+import type { FluidT4ShockResult } from "../fluidT4Shock";
 
 type FixturesShape = {
   meta: MetaResponse;
@@ -132,6 +135,28 @@ const MOCK_CHAINED_LIQUIDATION: ChainedLiquidationResult[] = [
   { protocol: "fluid", presetId: "lst-depeg", magnitudePct: "-3", positionAId: "fluid-0xAf1a5Ce79f93b9F157cd10b3aABeF151236bA6B7-request-A", positionBId: "fluid-0xAf1a5Ce79f93b9F157cd10b3aABeF151236bA6B7-request-B", debtAssetSymbol: "USDC", debtAssetDecimals: 6, positionATxStatus: "success", isolatedStatus: "swept", isolatedDebtRepaid: "1559895", chainedStatus: "swept", chainedDebtRepaid: "0", debtRepaidDiff: "-1559895", debtRepaidDiffPct: "-100.000000", detail: "A and B request the IDENTICAL full totalBorrowVault amount (Fluid's liquidate() is vault-level/tick-based, not per-user) - a real diff here measures real tick consumption, not index drift.", createdAt: "2026-08-16T10:43:08.238Z" },
   { protocol: "fluid", presetId: "lst-depeg", magnitudePct: "-5", positionAId: "fluid-0xc8Ea45f5af4eeb4DD226928d7E93440547B59C7D-request-A", positionBId: "fluid-0xc8Ea45f5af4eeb4DD226928d7E93440547B59C7D-request-B", debtAssetSymbol: "USDT", debtAssetDecimals: 6, positionATxStatus: "success", isolatedStatus: "swept", isolatedDebtRepaid: "22657493", chainedStatus: "swept", chainedDebtRepaid: "0", debtRepaidDiff: "-22657493", debtRepaidDiffPct: "-100.000000", detail: "A and B request the IDENTICAL full totalBorrowVault amount (Fluid's liquidate() is vault-level/tick-based, not per-user) - a real diff here measures real tick consumption, not index drift.", createdAt: "2026-08-16T10:43:08.238Z" },
   { protocol: "fluid", presetId: "lst-depeg", magnitudePct: "-30", positionAId: "fluid-0x13F82C0c281a3B973A7288d3ebc468495AA4Eed7-request-A", positionBId: "fluid-0x13F82C0c281a3B973A7288d3ebc468495AA4Eed7-request-B", debtAssetSymbol: "GHO", debtAssetDecimals: 18, positionATxStatus: "success", isolatedStatus: "swept", isolatedDebtRepaid: "10516739316072448049", chainedStatus: "swept", chainedDebtRepaid: "0", debtRepaidDiff: "-10516739316072448049", debtRepaidDiffPct: "-100.000000", detail: "A and B request the IDENTICAL full totalBorrowVault amount (Fluid's liquidate() is vault-level/tick-based, not per-user) - a real diff here measures real tick consumption, not index drift.", createdAt: "2026-08-16T10:43:08.238Z" },
+  // Real result from Deploy 2/6 (#66, T2 fork tier) - a real WEETH/ETH smart-collateral
+  // vault, real -65% depeg via a real oracle-bytecode override, real mined liquidate() (the
+  // real six-param signature, not T1's four - see docs/decisions.md's 2026-09-03 entry). The
+  // exact same 100% consumption effect as T1, confirmed live.
+  { protocol: "fluid-t2", presetId: "correlated", magnitudePct: "-65", positionAId: "fluid-t2-0xb4a15526d427f4d20b0dAdaF3baB4177C85A699A-request-A", positionBId: "fluid-t2-0xb4a15526d427f4d20b0dAdaF3baB4177C85A699A-request-B", debtAssetSymbol: "WSTETH", debtAssetDecimals: 18, positionATxStatus: "success", isolatedStatus: "swept", isolatedDebtRepaid: "1334821146350000704", chainedStatus: "not-applicable", chainedDebtRepaid: null, debtRepaidDiff: null, debtRepaidDiffPct: null, detail: "A and B request the IDENTICAL full totalBorrowVault amount (Fluid's liquidate() is vault-level/tick-based, not per-user, for every vault type including T2) - a real diff here measures real tick consumption, not index drift.", createdAt: "2026-09-03T05:00:00.000Z" },
+  // Real result from Deploy 4/6 (#68, T3 fork tier) - a real vault, real -5% depeg, real
+  // mined liquidate() (the real six-param debt-side signature). Genuinely different from
+  // T1/T2: a small, nonzero amount remains liquidatable afterward, not exactly zero - an
+  // honest approximation gap converting "shares genuinely liquidatable" into the debt
+  // pool's two real token amounts, not a different underlying mechanism. debtAssetSymbol/
+  // Decimals are null - actualDebtAmt_ for a smart-debt vault is in debt-SHARE units, not a
+  // single real token's amount.
+  { protocol: "fluid-t3", presetId: "correlated", magnitudePct: "-5", positionAId: "fluid-t3-0xC8c9EF21613eB49F6959252154eE8632E40A67Ce-request-A", positionBId: "fluid-t3-0xC8c9EF21613eB49F6959252154eE8632E40A67Ce-request-B", debtAssetSymbol: null, debtAssetDecimals: null, positionATxStatus: "success", isolatedStatus: "swept", isolatedDebtRepaid: "105571155409783929901911", chainedStatus: "swept", chainedDebtRepaid: "63724952195345243", debtRepaidDiff: "-105571091684831734556668", debtRepaidDiffPct: "-99.999940", detail: "A and B request the IDENTICAL real per-vault-share debt repayment (Fluid's liquidate() is vault-level/tick-based, not per-user, for every vault type including T3) - a real diff here measures real tick consumption, not index drift.", createdAt: "2026-09-03T06:00:00.000Z" },
+  // Real result from Deploy 6/6 (#70, T4 fork tier) - a real two-pool T4 vault, real -3%
+  // depeg, real mined liquidate() (the real 8-param signature - T3's debt params concatenated
+  // with T2's collateral params). Same T3-style genuinely-nonzero residual, not T1/T2's exact
+  // zero - confirmed live, not assumed to transfer just because the code does. Building this
+  // also found and fixed a real cross-tier bug: eth_estimateGas undershot for two real T4
+  // candidates (empty-revert-data reverts on a mined tx, indistinguishable from an
+  // unrecognized error until traced) - fixed with an explicit gas limit, applied to every
+  // Fluid tier once a T3 candidate was directly observed hitting the same failure.
+  { protocol: "fluid-t4", presetId: "correlated", magnitudePct: "-3", positionAId: "fluid-t4-0xB170B94BeFe21098966aa9905Da6a2F569463A21-request-A", positionBId: "fluid-t4-0xB170B94BeFe21098966aa9905Da6a2F569463A21-request-B", debtAssetSymbol: null, debtAssetDecimals: null, positionATxStatus: "success", isolatedStatus: "swept", isolatedDebtRepaid: "7820185448014809619", chainedStatus: "swept", chainedDebtRepaid: "16565337584298", debtRepaidDiff: "-7820168882677225321", debtRepaidDiffPct: "-99.999788", detail: "A and B request the IDENTICAL real per-vault-share debt repayment (Fluid's liquidate() is vault-level/tick-based, not per-user, for every vault type including T4) - a real diff here measures real tick consumption, not index drift.", createdAt: "2026-09-03T07:56:48.801Z" },
 ];
 
 export async function getMockChainedLiquidation(protocol?: ChainedProtocol): Promise<ChainedLiquidationResult[]> {
@@ -155,6 +180,51 @@ const MOCK_CAPPED_RATE_BREACH: CappedRateBreachResult[] = [
 
 export async function getMockCappedRateBreach(): Promise<CappedRateBreachResult[]> {
   return MOCK_CAPPED_RATE_BREACH;
+}
+
+// Real rows from a local sync run (Deploy 1/6) - one real T2 vault (WBTC-cbBTC smart
+// collateral, USDC normal debt) at three representative magnitudes, correlated preset only
+// (a small, illustrative slice - the real table has 6,480 rows across 16 vaults x 5 presets
+// x 81 magnitudes).
+const MOCK_FLUID_T2_SHOCK: FluidT2ShockResult[] = [
+  { vault: "0x5eb4ba0C320B59f825cc8D2291f672247Aa5D06F", collateralDex: "0x1d3e52a11B98Ed2AAB7eB0Bfe1cbB6525233204d", token0: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", token1: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", token0Decimals: 8, token1Decimals: 8, debtToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", debtDecimals: 6, presetId: "correlated", magnitudePct: "0", poolValueUsd8: "31897529237", poolValueUsd8Baseline: "31897529237", vaultCollateralValueUsd8: "31897529237", vaultDebtValueUsd8: "0", liquidatable: false, createdAt: "2026-08-25T12:16:13.452Z" },
+  { vault: "0x5eb4ba0C320B59f825cc8D2291f672247Aa5D06F", collateralDex: "0x1d3e52a11B98Ed2AAB7eB0Bfe1cbB6525233204d", token0: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", token1: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", token0Decimals: 8, token1Decimals: 8, debtToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", debtDecimals: 6, presetId: "correlated", magnitudePct: "-50", poolValueUsd8: "31897529237", poolValueUsd8Baseline: "31897529237", vaultCollateralValueUsd8: "31897529237", vaultDebtValueUsd8: "0", liquidatable: false, createdAt: "2026-08-25T12:16:13.452Z" },
+];
+
+export async function getMockFluidT2Shock(): Promise<FluidT2ShockResult[]> {
+  return MOCK_FLUID_T2_SHOCK;
+}
+
+// Real rows from a local sync run (Deploy 3/6, T3 - normal collateral, smart debt) - one
+// real, active native-ETH-collateral vault (93 real positions) at two magnitudes, correlated
+// preset only. vaultDebtValueUsd8 is the REAL per-vault share of the debt pool (this vault
+// owns ~0.92% of the pool's debt shares) - not the raw pool total (poolValueUsd8), which
+// would make this healthy vault look ~38x over-indebted - see
+// api/src/db/migrations/0009_fluid_t3_shock_results.ts's top comment for the real bug this
+// fixes.
+const MOCK_FLUID_T3_SHOCK: FluidT3ShockResult[] = [
+  { vault: "0x3E11B9aEb9C7dBbda4DD41477223Cc2f3f24b9d7", collateralToken: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", collateralDecimals: 18, debtDex: "0x667701e51B4D1Ca244F17C78F7aB8744B4C99F9B", token0: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", token1: "0xdAC17F958D2ee523a2206206994597C13D831ec7", token0Decimals: 6, token1Decimals: 6, presetId: "correlated", magnitudePct: "0", poolValueUsd8: "3285832119717321", poolValueUsd8Baseline: "3285832119717321", vaultCollateralValueUsd8: "86033776528827", vaultDebtValueUsd8: "30238017944144", liquidatable: false, createdAt: "2026-09-03T05:00:00.000Z" },
+  { vault: "0x3E11B9aEb9C7dBbda4DD41477223Cc2f3f24b9d7", collateralToken: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", collateralDecimals: 18, debtDex: "0x667701e51B4D1Ca244F17C78F7aB8744B4C99F9B", token0: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", token1: "0xdAC17F958D2ee523a2206206994597C13D831ec7", token0Decimals: 6, token1Decimals: 6, presetId: "correlated", magnitudePct: "-50", poolValueUsd8: "3285832119717321", poolValueUsd8Baseline: "3285832119717321", vaultCollateralValueUsd8: "43016888264413", vaultDebtValueUsd8: "30238017944144", liquidatable: false, createdAt: "2026-09-03T05:00:00.000Z" },
+];
+
+export async function getMockFluidT3Shock(): Promise<FluidT3ShockResult[]> {
+  return MOCK_FLUID_T3_SHOCK;
+}
+
+// Real rows from a local sync run (Deploy 5/6, T4 - smart collateral AND smart debt). One
+// real, active same-pool vault (col_token0 === debt_token0, col_token1 === debt_token1,
+// collateralDex === debtDex - a WETH-native-ETH pool serving both legs) at two magnitudes,
+// correlated preset only. vaultCollateralValueUsd8/vaultDebtValueUsd8 are each this vault's
+// real, precise share of that ONE pool - two independent fractions (supply shares vs borrow
+// shares), not a shared one - see api/src/db/migrations/0010_fluid_t4_shock_results.ts's top
+// comment.
+const MOCK_FLUID_T4_SHOCK: FluidT4ShockResult[] = [
+  { vault: "0x528CF7DBBff878e02e48E83De5097F8071af768D", collateralDex: "0x0B1a513ee24972DAEf112bC777a5610d4325C9e7", colToken0: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0", colToken1: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", colToken0Decimals: 18, colToken1Decimals: 18, debtDex: "0x0B1a513ee24972DAEf112bC777a5610d4325C9e7", debtToken0: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0", debtToken1: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", debtToken0Decimals: 18, debtToken1Decimals: 18, presetId: "correlated", magnitudePct: "0", colPoolValueUsd8: "4429538753624599", colPoolValueUsd8Baseline: "4429538753624599", debtPoolValueUsd8: "3958734659302978", debtPoolValueUsd8Baseline: "3958734659302978", vaultCollateralValueUsd8: "4429532813613130", vaultDebtValueUsd8: "3958728812251886", liquidatable: false, createdAt: "2026-09-03T01:20:34.680Z" },
+  { vault: "0x528CF7DBBff878e02e48E83De5097F8071af768D", collateralDex: "0x0B1a513ee24972DAEf112bC777a5610d4325C9e7", colToken0: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0", colToken1: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", colToken0Decimals: 18, colToken1Decimals: 18, debtDex: "0x0B1a513ee24972DAEf112bC777a5610d4325C9e7", debtToken0: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0", debtToken1: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", debtToken0Decimals: 18, debtToken1Decimals: 18, presetId: "correlated", magnitudePct: "-50", colPoolValueUsd8: "2214769376812299", colPoolValueUsd8Baseline: "4429538753624599", debtPoolValueUsd8: "1979367329651489", debtPoolValueUsd8Baseline: "3958734659302978", vaultCollateralValueUsd8: "2214766406806564", vaultDebtValueUsd8: "1979364406125943", liquidatable: false, createdAt: "2026-09-03T01:20:34.680Z" },
+];
+
+export async function getMockFluidT4Shock(): Promise<FluidT4ShockResult[]> {
+  return MOCK_FLUID_T4_SHOCK;
 }
 
 export async function getMockMarketConcentration(

@@ -10,17 +10,24 @@ type Numeric = ColumnType<string, string | bigint, string | bigint>;
 
 export interface SnapshotsTable {
   id: Generated<number>;
-  protocol: "aave" | "fluid";
+  protocol: "aave" | "fluid" | "aave-v4";
   pinned_block: Numeric;
   created_at: ColumnType<Date, string | undefined, never>;
 }
 
 export interface IndexerProgressTable {
-  protocol: "aave" | "fluid";
+  protocol: "aave" | "fluid" | "aave-v4";
   last_indexed_block: Numeric;
 }
 
 export interface AaveBorrowCandidatesTable {
+  address: string;
+  discovered_at_block: Numeric;
+}
+
+// Deploy 7/8 (Aave V4 - RPC tier). Mirrors AaveBorrowCandidatesTable exactly - see
+// migrations/0011_aave_v4.ts's top comment.
+export interface AaveV4BorrowCandidatesTable {
   address: string;
   discovered_at_block: Numeric;
 }
@@ -46,6 +53,10 @@ export interface PositionsTable {
    *  insert omits these columns entirely and relies on the column's NULL default. */
   fluid_vault_address: ColumnType<string | null, string | null | undefined, string | null>;
   fluid_nft_id: ColumnType<string | null, string | bigint | null | undefined, string | bigint | null>;
+  /** Aave V4-only identity - (snapshot_id, user_address, aave_v4_spoke) is V4's natural key
+   *  (one wallet can have multiple real positions, one per Spoke - migration 0012). Null for
+   *  every other protocol's rows. */
+  aave_v4_spoke: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 export interface ProtocolParamsTable {
@@ -113,7 +124,7 @@ export interface LiquidationProfitabilityTable {
  *  The one tier that genuinely needs persistent, mutable EVM state - see anvilFork.ts. */
 export interface ChainedLiquidationResultsTable {
   id: Generated<number>;
-  protocol: "aave" | "fluid";
+  protocol: "aave" | "fluid" | "fluid-t2" | "fluid-t3" | "fluid-t4";
   preset_id: string;
   magnitude_pct: Numeric;
   position_a_id: string;
@@ -177,10 +188,62 @@ export interface FluidT2ShockResultsTable {
   created_at: ColumnType<Date, string | undefined, never>;
 }
 
+// Deploy 3/6 (Fluid T3 - RPC tier). Mirror of FluidT2ShockResultsTable - normal collateral
+// (scalar), smart debt (DEX pool) instead of the other way around. vault_debt_value_usd8 is
+// the real per-vault share (not the raw pool total) - see
+// migrations/0009_fluid_t3_shock_results.ts's top comment.
+export interface FluidT3ShockResultsTable {
+  id: Generated<number>;
+  vault: string;
+  collateral_token: string;
+  collateral_decimals: number;
+  debt_dex: string;
+  token0: string;
+  token1: string;
+  token0_decimals: number;
+  token1_decimals: number;
+  preset_id: string;
+  magnitude_pct: Numeric;
+  pool_value_usd8: Numeric;
+  pool_value_usd8_baseline: Numeric;
+  vault_collateral_value_usd8: Numeric;
+  vault_debt_value_usd8: Numeric;
+  liquidatable: boolean;
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
+// Deploy 5/6 (Fluid T4 - RPC tier). Both legs smart - see
+// migrations/0010_fluid_t4_shock_results.ts's top comment.
+export interface FluidT4ShockResultsTable {
+  id: Generated<number>;
+  vault: string;
+  collateral_dex: string;
+  col_token0: string;
+  col_token1: string;
+  col_token0_decimals: number;
+  col_token1_decimals: number;
+  debt_dex: string;
+  debt_token0: string;
+  debt_token1: string;
+  debt_token0_decimals: number;
+  debt_token1_decimals: number;
+  preset_id: string;
+  magnitude_pct: Numeric;
+  col_pool_value_usd8: Numeric;
+  col_pool_value_usd8_baseline: Numeric;
+  debt_pool_value_usd8: Numeric;
+  debt_pool_value_usd8_baseline: Numeric;
+  vault_collateral_value_usd8: Numeric;
+  vault_debt_value_usd8: Numeric;
+  liquidatable: boolean;
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
 export interface DB {
   snapshots: SnapshotsTable;
   indexer_progress: IndexerProgressTable;
   aave_borrow_candidates: AaveBorrowCandidatesTable;
+  aave_v4_borrow_candidates: AaveV4BorrowCandidatesTable;
   positions: PositionsTable;
   protocol_params: ProtocolParamsTable;
   validation_results: ValidationResultsTable;
@@ -188,4 +251,6 @@ export interface DB {
   chained_liquidation_results: ChainedLiquidationResultsTable;
   capped_rate_breach_results: CappedRateBreachResultsTable;
   fluid_t2_shock_results: FluidT2ShockResultsTable;
+  fluid_t3_shock_results: FluidT3ShockResultsTable;
+  fluid_t4_shock_results: FluidT4ShockResultsTable;
 }

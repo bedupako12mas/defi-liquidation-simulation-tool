@@ -187,6 +187,9 @@ export function CascadeDetailTab() {
 
   const aaveChained = chained?.filter((r) => r.protocol === "aave") ?? [];
   const fluidChained = chained?.filter((r) => r.protocol === "fluid") ?? [];
+  const fluidT2Chained = chained?.filter((r) => r.protocol === "fluid-t2") ?? [];
+  const fluidT3Chained = chained?.filter((r) => r.protocol === "fluid-t3") ?? [];
+  const fluidT4Chained = chained?.filter((r) => r.protocol === "fluid-t4") ?? [];
 
   return (
     <div>
@@ -238,6 +241,46 @@ export function CascadeDetailTab() {
           would wrongly suggest is still available.
         </p>
         {chained === null && !chainedError ? <p className="loading">Loading...</p> : <ChainedLiquidationTable rows={fluidChained} />}
+        <h3 style={{ marginTop: "1.75rem" }}>Fluid T2 (smart collateral)</h3>
+        <p className="preset-note" style={{ marginTop: 0 }}>
+          The exact same 100% consumption effect as T1, confirmed across every real T2
+          candidate tested - a real, cross-validated sign that this is a property of Fluid&apos;s
+          vault-level/tick-based <code>liquidate()</code> mechanism generally, not something
+          specific to T1&apos;s plain-collateral vaults. Getting a real, mined liquidation
+          working here took two real fixes: T2&apos;s actual <code>liquidate()</code> signature
+          has two extra parameters T1&apos;s doesn&apos;t (slippage protection for the two-token
+          DEX-share collateral leg), and those two parameters can&apos;t both be left at the
+          naive &ldquo;no protection&rdquo; value of 0 - the vault rejects it outright.
+        </p>
+        {chained === null && !chainedError ? <p className="loading">Loading...</p> : <ChainedLiquidationTable rows={fluidT2Chained} />}
+        <h3 style={{ marginTop: "1.75rem" }}>Fluid T3 (smart debt)</h3>
+        <p className="preset-note" style={{ marginTop: 0 }}>
+          A genuinely different real result from T1/T2: A&apos;s real liquidation still
+          leaves a small, nonzero amount liquidatable afterward (not exactly zero). This is
+          an honest approximation gap, not a different mechanism - T2&apos;s collateral
+          withdrawal is naturally clamped to whatever&apos;s actually available, so a full
+          sweep always lands exactly on the real maximum; T3&apos;s debt repayment needs an
+          exact token amount for each of the debt pool&apos;s two underlying tokens, and
+          converting &ldquo;shares genuinely liquidatable&rdquo; into those two real token
+          amounts via the pool&apos;s aggregate reserve ratio is a close approximation of
+          Fluid&apos;s own internal accounting, not an exact match.
+        </p>
+        {chained === null && !chainedError ? <p className="loading">Loading...</p> : <ChainedLiquidationTable rows={fluidT3Chained} />}
+        <h3 style={{ marginTop: "1.75rem" }}>Fluid T4 (smart collateral AND smart debt)</h3>
+        <p className="preset-note" style={{ marginTop: 0 }}>
+          T4&apos;s real <code>liquidate()</code> is literally T3&apos;s debt-side parameters
+          concatenated with T2&apos;s collateral-side parameters (confirmed from Fluid&apos;s
+          own liquidator source, not assumed) - and the real result here confirms that: every
+          successful candidate shows the exact same near-total-but-genuinely-nonzero pattern
+          as T3, not T1/T2&apos;s exact zero. Building this also caught one real, initially
+          confusing bug shared by every Fluid tier, not just T4: two candidates reverted with
+          zero revert data at all - traced to <code>eth_estimateGas</code> undershooting for a
+          real, complex <code>liquidate()</code> call (a two-pool T4 vault touches two
+          separate DEX pools&apos; storage in one transaction). Fixed with an explicit gas
+          limit, applied to every Fluid tier once a T3 candidate was directly observed hitting
+          the same failure between two otherwise-identical runs.
+        </p>
+        {chained === null && !chainedError ? <p className="loading">Loading...</p> : <ChainedLiquidationTable rows={fluidT4Chained} />}
       </div>
 
       <div className="card">

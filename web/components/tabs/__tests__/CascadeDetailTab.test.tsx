@@ -27,10 +27,10 @@ describe("CascadeDetailTab", () => {
     expect(screen.queryByText(/ComingSoonPanel/)).toBeNull();
   });
 
-  it("renders real tables, not just prose - chained liquidation (Aave, Fluid) + CappedRate breach", async () => {
+  it("renders real tables, not just prose - chained liquidation (Aave, Fluid, Fluid T2, Fluid T3, Fluid T4) + CappedRate breach", async () => {
     const { container } = render(<CascadeDetailTab />);
     await waitFor(() => expect(screen.queryAllByText(/Loading/).length).toBe(0));
-    expect(container.querySelectorAll("table").length).toBe(3);
+    expect(container.querySelectorAll("table").length).toBe(6);
   });
 
   it("shows every token amount and percentage with a real unit, never a bare number", async () => {
