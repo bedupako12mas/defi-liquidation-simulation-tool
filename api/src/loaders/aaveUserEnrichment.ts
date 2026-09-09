@@ -2,6 +2,7 @@ import type { PublicClient } from "viem";
 import { parseAbi } from "viem";
 import type { AaveReserveConfig } from "./aaveReserveConfig.js";
 import type { CollateralLeg, DebtLeg, Position } from "../engine/types.js";
+import { multicallWithRateLimitRetry } from "../rpc/rateLimitRetry.js";
 
 const DATA_PROVIDER_ABI = parseAbi([
   "function getUserReserveData(address asset, address user) view returns (uint256 currentATokenBalance, uint256 currentStableDebt, uint256 currentVariableDebt, uint256 principalStableDebt, uint256 scaledVariableDebt, uint256 stableBorrowRate, uint256 liquidityRate, uint40 stableRateLastUpdated, bool usageAsCollateralEnabled)",
@@ -43,10 +44,17 @@ const DEFAULT_ENRICH_BATCH_SIZE = 25;
 // failures (task #51's isolated diagnostic) - ruling out a structural/interface problem.
 // The original 69% failure only showed up at real widening-run scale (thousands of calls,
 // several minutes of sustained load), which a quick small test can't reproduce - consistent
-// with rate limiting that only bites under sustained load, not a per-batch defect. Dropping
-// batch size (25->15) alone didn't help because batch size controls request SIZE, not
-// request RATE - this pacing delay targets the actual lever. Overridable for the same
-// reason batch size is: a paid tier shouldn't be artificially throttled either.
+// with rate limiting that only bites under sustained load, not a per-batch defect. Overridable
+// for the same reason batch size is: a paid tier shouldn't be artificially throttled either.
+//
+// UPDATE 2026-09-10: this delay alone is NOT sufficient at real full-backfill scale (a later
+// run at 5,757 candidates still hit a 74% failure rate with this exact delay in place) - a
+// direct stress test found the real mechanism: once a genuine 429 triggers, it stays active
+// for ~50+ seconds, far longer than any reasonable inter-batch pacing, and (worse) viem's own
+// default retries during that window are themselves real requests that keep re-triggering it.
+// A short pacing delay reduces how OFTEN the limit gets hit; it can't make a batch recover
+// once it does. See rateLimitRetry.ts's multicallWithRateLimitRetry for the actual fix
+// (wholesale batch retry with real, multi-second backoff), now wrapping the call below.
 const DEFAULT_INTER_BATCH_DELAY_MS = 250;
 
 function sleep(ms: number): Promise<void> {
@@ -85,7 +93,7 @@ export async function enrichPositions(
 
     if (contracts.length === 0) continue;
     totalContracts += contracts.length;
-    const batchResults = (await client.multicall({ contracts, allowFailure: true, blockNumber })) as ReserveDataResult[];
+    const batchResults = await multicallWithRateLimitRetry<ReserveDataResult>(client, contracts, blockNumber, "aaveUserEnrichment");
     results.push(...batchResults);
 
     if (interBatchDelayMs > 0 && i + batchSize < candidates.length) {

@@ -1,5 +1,6 @@
 import { type PublicClient, parseAbiItem, getAddress } from "viem";
 import { AAVE_V3_POOL_ADDRESS } from "./aaveAddresses.js";
+import { withRateLimitRetry } from "../rpc/rateLimitRetry.js";
 
 // onBehalfOf, not user, is the account whose debt actually increases - user is only the
 // caller (relevant for credit-delegated borrows). See docs/decisions.md - getting this
@@ -99,7 +100,15 @@ type BorrowLog = Awaited<ReturnType<typeof fetchLogsOnce>>[number];
 // failure into a fan-out of retries against an endpoint that's already struggling. This
 // is a heuristic (providers don't return a machine-readable "this was a range error"
 // signal), not a guarantee - but it's a real filter, not none at all.
-const RANGE_LIMIT_ERROR_PATTERN = /range|too large|too many|block span|limit exceeded/i;
+//
+// Real, live-caught bug (2026-09-10): this stated intent was already right, but "too many"
+// in the pattern ALSO matched a genuine 429 "Too Many Requests" message, silently
+// contradicting the comment above it - a rate-limit error was being misclassified as a range
+// error, triggering a SPLIT (two requests instead of one) in response to a rate problem,
+// doubling load against an already-throttled endpoint. Narrowed to range-shaped phrasing
+// only; rate-limit errors are now caught first, below, via withRateLimitRetry's real
+// multi-second backoff instead.
+const RANGE_LIMIT_ERROR_PATTERN = /range|too large|block span|limit exceeded/i;
 
 function isRangeLimitError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
@@ -118,7 +127,7 @@ async function getLogsWithBackoff(
   toBlock: bigint,
 ): Promise<BorrowLog[]> {
   try {
-    return await fetchLogsOnce(client, fromBlock, toBlock);
+    return await withRateLimitRetry(() => fetchLogsOnce(client, fromBlock, toBlock), "aaveBorrowDiscovery");
   } catch (err) {
     const rangeSize = toBlock - fromBlock + 1n;
     if (rangeSize <= MIN_CHUNK_SIZE || !isRangeLimitError(err)) {
