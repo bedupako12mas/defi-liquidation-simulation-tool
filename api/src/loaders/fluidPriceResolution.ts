@@ -16,8 +16,10 @@ const RECOGNIZED_STABLECOINS = new Set([
 // vault's supplyToken read back as exactly this value). Aave has no equivalent - it only
 // lists WETH. Used ONLY for the Aave-fallback lookup below, never for Fluid-native
 // resolution (where the sentinel is just another real token address in Fluid's own graph).
-const FLUID_NATIVE_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE".toLowerCase();
-const AAVE_WETH_ADDRESS = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2".toLowerCase();
+// Exported for reuse by syncFluidT2Shock.ts, which independently needed the same real
+// native-ETH-sentinel-to-Aave-WETH mapping - kept as one source of truth, not a second copy.
+export const FLUID_NATIVE_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE".toLowerCase();
+export const AAVE_WETH_ADDRESS = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2".toLowerCase();
 
 export interface FluidPriceResolution {
   /** Lowercased token address -> USD, 8-decimal fixed point. */

@@ -361,7 +361,7 @@ export async function estimateFluidLiquidationGas(
   }
 }
 
-function extractRevertData(err: unknown): `0x${string}` | undefined {
+export function extractRevertData(err: unknown): `0x${string}` | undefined {
   if (typeof err !== "object" || err === null) return undefined;
   // viem nests the raw revert data at different depths depending on the error type -
   // walk .cause chains and check common shapes rather than assume one fixed structure.
