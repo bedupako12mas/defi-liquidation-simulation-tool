@@ -13,6 +13,14 @@ export const FLUID_LIQUIDITY_RESOLVER = "0xca13A15de31235A37134B4717021C35A3CF25
 // sane values (real token0/token1 resolve to real mainnet tokens, e.g. USDC/USDT for a
 // confirmed smart-debt pool) - see api/scripts/investigations/fluid-vault-tiers/.
 export const FLUID_DEX_RESERVES_RESOLVER = "0x05Bd8269A20C472b148246De20E6852091BF16Ff" as const;
+// The real, general "Dex Resolver" (periphery/resolvers/dex/main.sol) - distinct from
+// FLUID_DEX_RESERVES_RESOLVER above (a narrower, swap-integration-focused resolver). Used
+// for getTotalSupplyShares/BorrowSharesRaw() - the real per-vault-share fix for T2/T3's
+// pool-level valuation approximation (see docs/decisions.md's 2026-09-03 T3 entry: a real
+// vault's own totalSupply/BorrowVault is denominated in DEX shares for a smart leg, and
+// needs dividing by the pool's total shares to get this vault's real fractional value,
+// rather than attributing the whole shared pool's value to every vault sharing it).
+export const FLUID_DEX_RESOLVER = "0x11D80CfF056Cef4F9E6d23da8672fE9873e5cC07" as const;
 
 export interface FluidAddresses {
   vaultT1Resolver: `0x${string}`;
@@ -20,6 +28,7 @@ export interface FluidAddresses {
   vaultResolver: `0x${string}`;
   liquidityResolver: `0x${string}`;
   dexReservesResolver: `0x${string}`;
+  dexResolver: `0x${string}`;
 }
 
 export function resolveFluidAddresses(): FluidAddresses {
@@ -29,5 +38,6 @@ export function resolveFluidAddresses(): FluidAddresses {
     vaultResolver: FLUID_VAULT_RESOLVER,
     liquidityResolver: FLUID_LIQUIDITY_RESOLVER,
     dexReservesResolver: FLUID_DEX_RESERVES_RESOLVER,
+    dexResolver: FLUID_DEX_RESOLVER,
   };
 }

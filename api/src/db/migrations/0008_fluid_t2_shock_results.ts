@@ -6,13 +6,16 @@ import type { Kysely } from "kysely";
 // simulation - see docs/decisions.md's 2026-08-25 entry for why the swap-simulation approach
 // was tried first and abandoned.
 //
-// KNOWN LIMITATION (disclosed in fluidSmartLegValuation.ts, repeated here since it directly
-// shapes this schema): pool_value_usd8 is the DEX POOL's total value, not this specific
-// vault's exact share of it (Fluid's real per-vault share mechanism - ConstantViews's
-// userSupplySlot - is not yet wired in). vault_collateral_value_usd8 approximates the
-// vault's share by applying the pool's shock ratio uniformly to the vault's own aggregate
-// totalSupply figure - exact only if the vault's share didn't move differently from the
-// pool average.
+// UPDATE (2026-09-03, retrofitted alongside T3's migration 0009): pool_value_usd8 is still
+// the DEX POOL's total value (kept for transparency), but vault_collateral_value_usd8 is NOT
+// an approximation anymore - it's the real, precise per-vault share (this vault's own supply
+// shares / the pool's total shares, both real on-chain values via FLUID_DEX_RESOLVER's
+// getTotalSupplySharesRaw - see fluidDexPoolState.ts's loadVaultSupplyShareFraction).
+// Originally shipped as a disclosed approximation (applying the pool's shock ratio to the
+// vault's own totalSupply figure, exact only if this vault's share didn't move differently
+// from the pool average) until the identical approximation was found to be actively wrong -
+// not just imprecise - on T3's debt leg (migration 0009's top comment), which prompted
+// fixing this side too rather than leaving a known-fixable flaw in place.
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema
     .createTable("fluid_t2_shock_results")
