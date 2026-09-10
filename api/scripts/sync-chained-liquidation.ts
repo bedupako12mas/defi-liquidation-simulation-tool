@@ -11,7 +11,7 @@ import { startAnvilFork, type AnvilFork } from "../src/fork/anvilFork.js";
 import { buildFixedReturnBytecode, buildFixedTupleReturnBytecode } from "../src/validation/stateOverride.js";
 import { probeTokenSlots } from "../src/validation/slotProbe.js";
 import { redactError } from "../src/rpc/redact.js";
-import { parseAbi, encodeFunctionData, decodeErrorResult, keccak256, encodeAbiParameters, numberToHex, getAddress } from "viem";
+import { parseAbi, encodeFunctionData, decodeFunctionResult, decodeErrorResult, decodeEventLog, keccak256, encodeAbiParameters, numberToHex, getAddress } from "viem";
 import { FLUID_VAULT_RESOLVER } from "../src/loaders/fluidAddresses.js";
 import { resolveSmartLegOracle } from "../src/validation/fluidT2OracleValidator.js";
 import { detectSmartLegs } from "../src/loaders/fluidSmartLeg.js";
@@ -25,6 +25,9 @@ import { loadFluidVaultConfigs } from "../src/loaders/fluidVaultConfig.js";
 import { resolveFluidPrices } from "../src/loaders/fluidPriceResolution.js";
 import { resolveFluidOverrideTarget, validateFluidLiquidation, estimateFluidLiquidationGas, extractRevertData } from "../src/validation/fluidValidator.js";
 import type { FluidVaultConfig } from "../src/loaders/fluidVaultConfig.js";
+import { AAVE_V4_SPOKES, type AaveV4SpokeName } from "../src/loaders/aaveV4Addresses.js";
+import { validateAaveV4Liquidation } from "../src/validation/aaveV4Validator.js";
+import { multicallWithRateLimitRetry } from "../src/rpc/rateLimitRetry.js";
 
 /**
  * #37: the real, fork-requiring capability locked in per docs/decisions.md - does liquidating
@@ -1278,6 +1281,393 @@ async function syncFluidT4(): Promise<Insertable<ChainedLiquidationResultsTable>
   return rows;
 }
 
+// #72: Aave V4's mainnet-fork tier. Scoped deliberately simpler than V3's #37 (position A
+// vs. unrelated position B): V4 uses a real target-health-factor liquidation design
+// (LiquidationLogic.sol, confirmed from aave/aave-v4's own source, 2026-09-10) rather than
+// V3's fixed close-factor - so the genuinely interesting real question here is "does ONE
+// real liquidationCall() actually restore a position above the target health factor, the
+// way its own design intends," not a second unrelated position's before/after drift. Same
+// "isolated vs. chained" shape as Fluid's T2/T3/T4 fork tiers (re-check the SAME real
+// position's own state before vs. after its own real mined transaction), not V3's two-
+// position shape.
+//
+// Deliberately does NOT reimplement V4's real debt/collateral-to-liquidate formula
+// independently (unlike aaveValidator.ts's computeExpectedMaxLiquidatableDebt for V3) -
+// _calculateDebtToTargetHealthFactor/_calculateCollateralToLiquidate depend on live Hub
+// share/interest-index state (previewAddByShares/previewRemoveByShares) not independently
+// derivable from Spoke-level reads alone. Same principled choice as the
+// FluidVaultTicksBranchesResolver decision (docs/decisions.md's 2026-09-06 entry): trust the
+// real contract's own dry-run/mined-tx result as ground truth, don't re-derive it externally.
+const AAVE_V4_CHAIN_AGENT = getAddress(`0x${"a4".repeat(20)}`);
+const AAVE_V4_CANDIDATE_SCAN_LIMIT = 500;
+const AAVE_V4_ENRICH_BATCH_SIZE = 20;
+
+const AAVE_V4_SPOKE_READ_ABI = parseAbi([
+  "function getUserAccountData(address user) view returns (uint256 riskPremium, uint256 avgCollateralFactor, uint256 healthFactor, uint256 totalCollateralValue, uint256 totalDebtValueRay, uint256 activeCollateralCount, uint256 borrowCount)",
+  "function getReserveCount() view returns (uint256)",
+  "function getReserve(uint256 reserveId) view returns (address underlying, address hub, uint16 assetId, uint8 decimals, uint24 collateralRisk, uint8 flags, uint32 dynamicConfigKey)",
+  "function getUserReserveStatus(uint256 reserveId, address user) view returns (bool usedAsCollateral, bool isBorrowed)",
+  "function getUserTotalDebt(uint256 reserveId, address user) view returns (uint256)",
+  "function ORACLE() view returns (address)",
+]);
+
+const AAVE_V4_ORACLE_READ_ABI = parseAbi([
+  "function getReserveSource(uint256 reserveId) view returns (address)",
+  "function getReservePrice(uint256 reserveId) view returns (uint256)",
+]);
+
+// Real, live-observed fact (2026-09-10): the direct getUserAccountData scan below very often
+// finds zero real (user, spoke) pairs with HF<1 at all - a real, healthy sign of a
+// competitive liquidation market clearing distressed positions fast, not a bug (fluid-t3/t4
+// found zero real candidates in this exact same run too - see docs/decisions.md). Real
+// positions constantly hover near the 1.0 boundary though (a live scan found one at HF
+// 1.001995 - 0.2% away), so a SMALL fallback shock search on the closest real position keeps
+// this tier actually exercisable rather than depending entirely on catching a rare live
+// moment. Linear, not binary - the real search space here is tiny (a handful of percent) and
+// this only ever needs to run once per sync, unlike sweepMagnitudes()'s wider searches.
+const AAVE_V4_SHOCK_FALLBACK_MAX_PCT = 20;
+
+interface AaveV4CandidateInfo {
+  spoke: `0x${string}`;
+  spokeName: AaveV4SpokeName;
+  user: `0x${string}`;
+  oracle: `0x${string}`;
+  collateralReserveId: bigint;
+  collateralAsset: `0x${string}`;
+  debtReserveId: bigint;
+  debtAsset: `0x${string}`;
+  debtAssetDecimals: number;
+  debtLegAmount: bigint;
+  healthFactor: bigint;
+  magnitudePct: number;
+  /** Set only when this candidate needed the shock fallback (real HF was >= 1.0 at baseline)
+   *  - the collateral reserve's real price-feed source and the shocked price to persistently
+   *  override it to, both on the fork and in the isolated/chained dry-run checks. Null for a
+   *  candidate that was genuinely already liquidatable with no shock needed. */
+  collateralPriceOverride: { source: `0x${string}`; shockedPrice: bigint } | null;
+}
+
+async function findReservesForUser(spoke: `0x${string}`, user: `0x${string}`): Promise<{ collateralReserveId: bigint; debtReserveId: bigint } | null> {
+  const reserveCount = await publicClient.readContract({ address: spoke, abi: AAVE_V4_SPOKE_READ_ABI, functionName: "getReserveCount" });
+  let collateralReserveId: bigint | null = null;
+  let debtReserveId: bigint | null = null;
+  for (let reserveId = 0n; reserveId < reserveCount; reserveId++) {
+    const [usedAsCollateral, isBorrowed] = await publicClient.readContract({ address: spoke, abi: AAVE_V4_SPOKE_READ_ABI, functionName: "getUserReserveStatus", args: [reserveId, user] });
+    if (usedAsCollateral && collateralReserveId === null) collateralReserveId = reserveId;
+    if (isBorrowed && debtReserveId === null) debtReserveId = reserveId;
+    if (collateralReserveId !== null && debtReserveId !== null) break;
+  }
+  return collateralReserveId !== null && debtReserveId !== null ? { collateralReserveId, debtReserveId } : null;
+}
+
+/**
+ * Re-reads getUserAccountData with the collateral reserve's real price-feed source
+ * temporarily overridden - a plain eth_call + stateOverride, same technique as
+ * aaveV4Validator.ts's price overrides, used here just to TEST a candidate magnitude, not to
+ * execute anything.
+ */
+async function healthFactorUnderShock(spoke: `0x${string}`, user: `0x${string}`, source: `0x${string}`, shockedPrice: bigint): Promise<bigint> {
+  const calldata = encodeFunctionData({ abi: AAVE_V4_SPOKE_READ_ABI, functionName: "getUserAccountData", args: [user] });
+  const raw = await publicClient.call({ to: spoke, data: calldata, stateOverride: [{ address: source, code: buildFixedReturnBytecode(shockedPrice) }] });
+  if (!raw.data) throw new Error("getUserAccountData returned no data under shock");
+  const decoded = decodeFunctionResult({ abi: AAVE_V4_SPOKE_READ_ABI, functionName: "getUserAccountData", data: raw.data });
+  return decoded[2];
+}
+
+// Real ISpoke.sol function + event + errors, confirmed from aave/aave-v4's own source
+// (2026-09-10) - see aaveV4Validator.ts's own comment for the same real facts (liquidator is
+// plain msg.sender, amounts are only ever surfaced via this event since liquidationCall()
+// itself returns nothing).
+const AAVE_V4_LIQUIDATE_ABI = parseAbi([
+  "function liquidationCall(uint256 collateralReserveId, uint256 debtReserveId, address user, uint256 debtToCover, bool receiveShares)",
+  "event LiquidationCall(uint256 indexed collateralReserveId, uint256 indexed debtReserveId, address indexed user, address liquidator, bool receiveShares, uint256 debtAmountRestored, uint256 drawnSharesLiquidated, (int256 sharesDelta, int256 offsetRayDelta, uint256 restoredPremiumRay) premiumDelta, uint256 collateralAmountRemoved, uint256 collateralSharesLiquidated, uint256 collateralSharesToLiquidator)",
+  "error SelfLiquidation()",
+  "error InvalidDebtToCover()",
+  "error ReservePaused()",
+  "error ReserveNotEnabledAsCollateral()",
+  "error ReserveNotSupplied()",
+  "error ReserveNotBorrowed()",
+  "error HealthFactorNotBelowThreshold()",
+  "error MustNotLeaveDust()",
+  "error CannotReceiveShares()",
+]);
+
+/**
+ * Finds one real, currently-liquidatable (right now, no hypothetical shock needed) Aave V4
+ * (user, Spoke) pair among the already-discovered candidate pool. Same cheap two-stage shape
+ * as aaveV4UserEnrichment.ts's own enrichAaveV4Positions (a getUserAccountData multicall
+ * pre-filter before any per-reserve enumeration) - reused here as a fresh LIVE check, not the
+ * days-old stored snapshot, since a real fork test needs the position to genuinely be
+ * liquidatable at the block the fork actually starts from.
+ */
+async function findAaveV4Candidate(): Promise<AaveV4CandidateInfo | null> {
+  const rows = await db.selectFrom("aave_v4_borrow_candidates").select("address").limit(AAVE_V4_CANDIDATE_SCAN_LIMIT).execute();
+  const spokeEntries = Object.entries(AAVE_V4_SPOKES) as [AaveV4SpokeName, `0x${string}`][];
+  let lowestHf: { spoke: `0x${string}`; spokeName: AaveV4SpokeName; user: `0x${string}`; healthFactor: bigint } | null = null;
+
+  for (let i = 0; i < rows.length; i += AAVE_V4_ENRICH_BATCH_SIZE) {
+    const batch = rows.slice(i, i + AAVE_V4_ENRICH_BATCH_SIZE);
+    const contracts = batch.flatMap((r) =>
+      spokeEntries.map(([, spoke]) => ({ address: spoke, abi: AAVE_V4_SPOKE_READ_ABI, functionName: "getUserAccountData", args: [r.address as `0x${string}`] }) as const),
+    );
+    type AccountDataResult =
+      | { status: "success"; result: readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint] }
+      | { status: "failure"; error: Error };
+    const results = await multicallWithRateLimitRetry<AccountDataResult>(publicClient, contracts, undefined, "sync-chained-aave-v4");
+
+    for (let bi = 0; bi < batch.length; bi++) {
+      for (let si = 0; si < spokeEntries.length; si++) {
+        const result = results[bi * spokeEntries.length + si];
+        if (!result || result.status !== "success") continue;
+        const [, , healthFactorVal, , , , borrowCount] = result.result;
+        if (borrowCount === 0n) continue;
+
+        const [spokeName, spoke] = spokeEntries[si]!;
+        const user = batch[bi]!.address as `0x${string}`;
+
+        if (healthFactorVal < 1_000_000_000_000_000_000n) {
+          // A real, already-liquidatable pair - build and return the candidate directly, no
+          // shock needed.
+          const reserves = await findReservesForUser(spoke, user);
+          if (!reserves) continue; // real but not testable this way - keep scanning
+          const oracle = await publicClient.readContract({ address: spoke, abi: AAVE_V4_SPOKE_READ_ABI, functionName: "ORACLE" });
+          const [collateralReserve, debtReserve, debtLegAmount] = await Promise.all([
+            publicClient.readContract({ address: spoke, abi: AAVE_V4_SPOKE_READ_ABI, functionName: "getReserve", args: [reserves.collateralReserveId] }),
+            publicClient.readContract({ address: spoke, abi: AAVE_V4_SPOKE_READ_ABI, functionName: "getReserve", args: [reserves.debtReserveId] }),
+            publicClient.readContract({ address: spoke, abi: AAVE_V4_SPOKE_READ_ABI, functionName: "getUserTotalDebt", args: [reserves.debtReserveId, user] }),
+          ]);
+          if (debtLegAmount === 0n) continue;
+          return {
+            spoke,
+            spokeName,
+            user,
+            oracle,
+            collateralReserveId: reserves.collateralReserveId,
+            collateralAsset: collateralReserve[0],
+            debtReserveId: reserves.debtReserveId,
+            debtAsset: debtReserve[0],
+            debtAssetDecimals: debtReserve[3],
+            debtLegAmount,
+            healthFactor: healthFactorVal,
+            magnitudePct: 0,
+            collateralPriceOverride: null,
+          };
+        }
+
+        if (lowestHf === null || healthFactorVal < lowestHf.healthFactor) {
+          lowestHf = { spoke, spokeName, user, healthFactor: healthFactorVal };
+        }
+      }
+    }
+  }
+
+  // Real, live-observed (2026-09-10): the direct scan above often finds nothing (a real,
+  // competitive liquidation market clears distressed positions fast). Fall back to a small
+  // shock search on whichever real pair currently sits closest to the threshold, so this
+  // tier stays exercisable rather than depending on catching a rare live moment.
+  if (!lowestHf) return null;
+  const reserves = await findReservesForUser(lowestHf.spoke, lowestHf.user);
+  if (!reserves) return null;
+
+  const oracle = await publicClient.readContract({ address: lowestHf.spoke, abi: AAVE_V4_SPOKE_READ_ABI, functionName: "ORACLE" });
+  const [collateralReserve, debtReserve, debtLegAmount, realCollateralPrice, source] = await Promise.all([
+    publicClient.readContract({ address: lowestHf.spoke, abi: AAVE_V4_SPOKE_READ_ABI, functionName: "getReserve", args: [reserves.collateralReserveId] }),
+    publicClient.readContract({ address: lowestHf.spoke, abi: AAVE_V4_SPOKE_READ_ABI, functionName: "getReserve", args: [reserves.debtReserveId] }),
+    publicClient.readContract({ address: lowestHf.spoke, abi: AAVE_V4_SPOKE_READ_ABI, functionName: "getUserTotalDebt", args: [reserves.debtReserveId, lowestHf.user] }),
+    publicClient.readContract({ address: oracle, abi: AAVE_V4_ORACLE_READ_ABI, functionName: "getReservePrice", args: [reserves.collateralReserveId] }),
+    publicClient.readContract({ address: oracle, abi: AAVE_V4_ORACLE_READ_ABI, functionName: "getReserveSource", args: [reserves.collateralReserveId] }),
+  ]);
+  if (debtLegAmount === 0n) return null;
+
+  for (let pct = 1; pct <= AAVE_V4_SHOCK_FALLBACK_MAX_PCT; pct++) {
+    const shockedPrice = (realCollateralPrice * BigInt(100 - pct)) / 100n;
+    const shockedHf = await healthFactorUnderShock(lowestHf.spoke, lowestHf.user, source, shockedPrice);
+    if (shockedHf < 1_000_000_000_000_000_000n) {
+      console.log(`[sync-chained] aave-v4: closest real pair needed a -${pct}% collateral shock to become liquidatable (real HF was ${(Number(lowestHf.healthFactor) / 1e18).toFixed(6)}).`);
+      return {
+        spoke: lowestHf.spoke,
+        spokeName: lowestHf.spokeName,
+        user: lowestHf.user,
+        oracle,
+        collateralReserveId: reserves.collateralReserveId,
+        collateralAsset: collateralReserve[0],
+        debtReserveId: reserves.debtReserveId,
+        debtAsset: debtReserve[0],
+        debtAssetDecimals: debtReserve[3],
+        debtLegAmount,
+        healthFactor: shockedHf,
+        magnitudePct: -pct,
+        collateralPriceOverride: { source, shockedPrice },
+      };
+    }
+  }
+  return null;
+}
+
+async function runAaveV4ChainedTest(candidate: AaveV4CandidateInfo, forkPort: number): Promise<Insertable<ChainedLiquidationResultsTable>> {
+  const positionId = `aave-v4-${candidate.spokeName}-${candidate.user.toLowerCase()}`;
+  const base = {
+    protocol: "aave-v4" as const,
+    preset_id: "correlated",
+    magnitude_pct: candidate.magnitudePct.toString(), // "0" when genuinely liquidatable already; negative when the shock fallback found this candidate
+    position_a_id: positionId,
+    position_b_id: `${positionId}-recheck`,
+    debt_asset_symbol: null as string | null,
+    debt_asset_decimals: candidate.debtAssetDecimals,
+  };
+  const oracleOverridePrices = candidate.collateralPriceOverride
+    ? { [candidate.collateralReserveId.toString()]: candidate.collateralPriceOverride.shockedPrice }
+    : undefined;
+
+  let fork: AnvilFork | undefined;
+  try {
+    fork = await startAnvilFork(undefined, forkPort);
+
+    // Persistent price override FIRST, before anything else reads real state on this fork -
+    // must be in place for both the isolated dry-run below and the real mined tx to see the
+    // SAME shocked price. Only set when this candidate needed the shock fallback (real HF
+    // was already < 1.0 for a direct hit - nothing to override).
+    if (candidate.collateralPriceOverride) {
+      await fork.setCode(candidate.collateralPriceOverride.source, buildFixedReturnBytecode(candidate.collateralPriceOverride.shockedPrice));
+    }
+
+    const isolatedProbe = await validateAaveV4Liquidation(fork.publicClient, {
+      spoke: candidate.spoke,
+      oracle: candidate.oracle,
+      user: candidate.user,
+      collateralReserveId: candidate.collateralReserveId,
+      debtReserveId: candidate.debtReserveId,
+      collateralAsset: candidate.collateralAsset,
+      debtAsset: candidate.debtAsset,
+      healthFactor: candidate.healthFactor, // already the shocked HF when a shock was applied - see findAaveV4Candidate
+      debtToCoverRequested: candidate.debtLegAmount,
+      oracleOverridePrices,
+    });
+
+    // Persistent debt-token funding for the real mined tx, separate from
+    // validateAaveV4Liquidation's own ephemeral Multicall3-funded dry-run above - spender is
+    // the Spoke (confirmed from Spoke.sol: liquidator is plain msg.sender, and
+    // liquidationCall pulls the debt asset via safeTransferFrom(liquidator, hub, ...) called
+    // FROM the Spoke, so the ALLOWANCE the ERC20 checks is liquidator -> Spoke).
+    const slots = await probeTokenSlots(fork.publicClient, candidate.debtAsset, AAVE_V4_CHAIN_AGENT, candidate.spoke);
+    if (!slots) {
+      return { ...base, position_a_tx_status: "not-attempted", isolated_status: isolatedProbe.status, isolated_debt_repaid: isolatedProbe.status === "liquidated" ? isolatedProbe.actualDebtRepaid.toString() : null, chained_status: null, chained_debt_repaid: null, debt_repaid_diff: null, detail: `Could not determine ${candidate.debtAsset}'s balance/allowance storage layout - real, disclosed limitation of the slot-probing technique for this token.` };
+    }
+    const fundedAmount = candidate.debtLegAmount * 1000n + 10n ** 30n;
+    const balanceSlot = keccak256(encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [AAVE_V4_CHAIN_AGENT, BigInt(slots.balanceSlotIndex)]));
+    const ownerSlot = keccak256(encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [AAVE_V4_CHAIN_AGENT, BigInt(slots.allowanceSlotIndex)]));
+    const allowanceSlot = keccak256(encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [candidate.spoke, ownerSlot]));
+    await fork.setStorageAt(candidate.debtAsset, balanceSlot, numberToHex(fundedAmount, { size: 32 }));
+    await fork.setStorageAt(candidate.debtAsset, allowanceSlot, numberToHex(fundedAmount, { size: 32 }));
+
+    const wallet = await fork.impersonate(AAVE_V4_CHAIN_AGENT);
+    const liquidationCalldataA = encodeFunctionData({
+      abi: AAVE_V4_LIQUIDATE_ABI,
+      functionName: "liquidationCall",
+      args: [candidate.collateralReserveId, candidate.debtReserveId, candidate.user, candidate.debtLegAmount, false],
+    });
+    const txHashA = await wallet.sendTransaction({ account: AAVE_V4_CHAIN_AGENT, to: candidate.spoke, data: liquidationCalldataA, chain: null, gas: 5_000_000n });
+    const receiptA = await fork.publicClient.waitForTransactionReceipt({ hash: txHashA });
+    console.log(`[sync-chained] aave-v4 ${positionId}: A's real liquidation ${receiptA.status}, block ${receiptA.blockNumber}`);
+
+    if (receiptA.status !== "success") {
+      let revertDetail = "unknown";
+      try {
+        await fork.publicClient.call({ account: AAVE_V4_CHAIN_AGENT, to: candidate.spoke, data: liquidationCalldataA });
+      } catch (simErr) {
+        const simData = extractRevertData(simErr);
+        if (simData) {
+          try {
+            const decoded = decodeErrorResult({ abi: AAVE_V4_LIQUIDATE_ABI, data: simData });
+            revertDetail = decoded.errorName;
+          } catch {
+            revertDetail = `undecodable revert data: ${simData.slice(0, 80)}`;
+          }
+        } else {
+          revertDetail = (simErr as Error).message.split("\n")[0]!;
+        }
+      }
+      console.log(`[sync-chained] aave-v4 ${positionId}: revert reason - ${revertDetail}`);
+      return { ...base, position_a_tx_status: receiptA.status, isolated_status: isolatedProbe.status, isolated_debt_repaid: isolatedProbe.status === "liquidated" ? isolatedProbe.actualDebtRepaid.toString() : null, chained_status: null, chained_debt_repaid: null, debt_repaid_diff: null, detail: `A's real liquidation reverted on the fork (${revertDetail}) - chaining not testable for this position.` };
+    }
+
+    // Real amounts come from the mined tx's own emitted event - liquidationCall() itself
+    // returns nothing (confirmed from ISpoke.sol), unlike Aave V3's balance-diff sandwich
+    // this replaces for the MINED-tx path specifically (the isolated dry-run above still
+    // uses the balance-diff sandwich, since eth_call can't surface event logs the same way).
+    let actualDebtRestored: bigint | null = null;
+    let actualCollateralRemoved: bigint | null = null;
+    for (const log of receiptA.logs) {
+      try {
+        const decoded = decodeEventLog({ abi: AAVE_V4_LIQUIDATE_ABI, data: log.data, topics: log.topics, eventName: "LiquidationCall" });
+        actualDebtRestored = decoded.args.debtAmountRestored;
+        actualCollateralRemoved = decoded.args.collateralAmountRemoved;
+        break;
+      } catch {
+        continue; // not the log we're looking for (e.g. an ERC20 Transfer log in the same tx)
+      }
+    }
+
+    // Real post-mining state - re-fetch health factor live rather than reuse the pre-mining
+    // value, since the whole point of this check is whether the mined liquidation actually
+    // moved it. A stale HF here would silently make validateAaveV4Liquidation's prefilter
+    // wrong regardless of what actually happened on-chain.
+    const postAccountData = await fork.publicClient.readContract({ address: candidate.spoke, abi: AAVE_V4_SPOKE_READ_ABI, functionName: "getUserAccountData", args: [candidate.user] });
+    const postHealthFactor = postAccountData[2];
+
+    const chainedProbe = await validateAaveV4Liquidation(fork.publicClient, {
+      spoke: candidate.spoke,
+      oracle: candidate.oracle,
+      user: candidate.user,
+      collateralReserveId: candidate.collateralReserveId,
+      debtReserveId: candidate.debtReserveId,
+      collateralAsset: candidate.collateralAsset,
+      debtAsset: candidate.debtAsset,
+      healthFactor: postHealthFactor,
+      debtToCoverRequested: candidate.debtLegAmount,
+      oracleOverridePrices,
+    });
+    console.log(`[sync-chained] aave-v4 ${positionId}: post-liquidation health factor ${(Number(postHealthFactor) / 1e18).toFixed(4)}, chained probe status ${chainedProbe.status}`);
+
+    const isolatedRepaid = isolatedProbe.status === "liquidated" ? isolatedProbe.actualDebtRepaid : null;
+    const chainedRepaid = chainedProbe.status === "liquidated" ? chainedProbe.actualDebtRepaid : null;
+    const diff = isolatedRepaid !== null && chainedRepaid !== null ? chainedRepaid - isolatedRepaid : null;
+
+    return {
+      ...base,
+      position_a_tx_status: receiptA.status,
+      isolated_status: isolatedProbe.status,
+      isolated_debt_repaid: isolatedRepaid,
+      chained_status: chainedProbe.status,
+      chained_debt_repaid: chainedRepaid,
+      debt_repaid_diff: diff,
+      detail:
+        chainedProbe.status === "not-liquidatable"
+          ? `Real mined liquidationCall() restored HF to ${(Number(postHealthFactor) / 1e18).toFixed(4)} (>= 1.0), matching V4's real target-health-factor design (LiquidationConfig.targetHealthFactor) - one real liquidation was enough, unlike V3's fixed close-factor which often needs a second partial liquidation. Real event: ${actualDebtRestored !== null ? `debtAmountRestored=${actualDebtRestored}, collateralAmountRemoved=${actualCollateralRemoved}` : "LiquidationCall event not found in receipt logs"}.`
+          : `Real mined liquidationCall() left HF at ${(Number(postHealthFactor) / 1e18).toFixed(4)} (still < 1.0) - the position remained liquidatable after one real liquidation, a genuinely different real outcome from the single-shot-heals-it case. Real event: ${actualDebtRestored !== null ? `debtAmountRestored=${actualDebtRestored}, collateralAmountRemoved=${actualCollateralRemoved}` : "LiquidationCall event not found in receipt logs"}.`,
+    };
+  } finally {
+    fork?.stop();
+  }
+}
+
+async function syncAaveV4(): Promise<Insertable<ChainedLiquidationResultsTable>[]> {
+  console.log("[sync-chained] aave-v4: searching for a real, currently-liquidatable V4 position...");
+  const candidate = await findAaveV4Candidate();
+  if (!candidate) {
+    console.log("[sync-chained] aave-v4: no real currently-liquidatable candidate found.");
+    return [];
+  }
+  console.log(`[sync-chained] aave-v4: found real candidate aave-v4-${candidate.spokeName}-${candidate.user} (HF ${(Number(candidate.healthFactor) / 1e18).toFixed(4)}).`);
+
+  try {
+    return [await runAaveV4ChainedTest(candidate, 9000)];
+  } catch (err) {
+    console.warn("[sync-chained] aave-v4 candidate failed, skipping:", redactError(err));
+    return [];
+  }
+}
+
 async function main() {
   await assertAllowedChain();
 
@@ -1357,6 +1747,13 @@ async function main() {
     console.warn("[sync-chained] fluid-t4 sync failed entirely, writing zero fluid-t4 rows:", redactError(err));
   }
 
+  let aaveV4Rows: Insertable<ChainedLiquidationResultsTable>[] = [];
+  try {
+    aaveV4Rows = await syncAaveV4();
+  } catch (err) {
+    console.warn("[sync-chained] aave-v4 sync failed entirely, writing zero aave-v4 rows:", redactError(err));
+  }
+
   await db.transaction().execute(async (trx) => {
     await trx.deleteFrom("chained_liquidation_results").where("protocol", "=", "aave").execute();
     if (aaveRows.length > 0) await trx.insertInto("chained_liquidation_results").values(aaveRows).execute();
@@ -1368,8 +1765,10 @@ async function main() {
     if (fluidT3Rows.length > 0) await trx.insertInto("chained_liquidation_results").values(fluidT3Rows).execute();
     await trx.deleteFrom("chained_liquidation_results").where("protocol", "=", "fluid-t4").execute();
     if (fluidT4Rows.length > 0) await trx.insertInto("chained_liquidation_results").values(fluidT4Rows).execute();
+    await trx.deleteFrom("chained_liquidation_results").where("protocol", "=", "aave-v4").execute();
+    if (aaveV4Rows.length > 0) await trx.insertInto("chained_liquidation_results").values(aaveV4Rows).execute();
   });
-  console.log(`[sync-chained] wrote ${aaveRows.length} aave row(s), ${fluidRows.length} fluid row(s), ${fluidT2Rows.length} fluid-t2 row(s), ${fluidT3Rows.length} fluid-t3 row(s), ${fluidT4Rows.length} fluid-t4 row(s).`);
+  console.log(`[sync-chained] wrote ${aaveRows.length} aave row(s), ${fluidRows.length} fluid row(s), ${fluidT2Rows.length} fluid-t2 row(s), ${fluidT3Rows.length} fluid-t3 row(s), ${fluidT4Rows.length} fluid-t4 row(s), ${aaveV4Rows.length} aave-v4 row(s).`);
 
   await db.destroy();
 }

@@ -10,7 +10,7 @@ interface ProtocolQuery {
 }
 
 export interface ChainedLiquidationDTO {
-  protocol: "aave" | "fluid" | "fluid-t2" | "fluid-t3" | "fluid-t4";
+  protocol: "aave" | "fluid" | "fluid-t2" | "fluid-t3" | "fluid-t4" | "aave-v4";
   presetId: string;
   magnitudePct: string;
   positionAId: string;
@@ -59,9 +59,10 @@ export function registerChainedLiquidationRoutes(app: FastifyInstance, deps: { d
         protocol !== "fluid" &&
         protocol !== "fluid-t2" &&
         protocol !== "fluid-t3" &&
-        protocol !== "fluid-t4"
+        protocol !== "fluid-t4" &&
+        protocol !== "aave-v4"
       ) {
-        reply.code(400).send({ error: `Unknown protocol "${protocol}". Valid: aave, fluid, fluid-t2, fluid-t3, fluid-t4.` });
+        reply.code(400).send({ error: `Unknown protocol "${protocol}". Valid: aave, fluid, fluid-t2, fluid-t3, fluid-t4, aave-v4.` });
         return [];
       }
 

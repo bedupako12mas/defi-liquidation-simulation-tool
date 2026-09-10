@@ -124,7 +124,7 @@ export interface LiquidationProfitabilityTable {
  *  The one tier that genuinely needs persistent, mutable EVM state - see anvilFork.ts. */
 export interface ChainedLiquidationResultsTable {
   id: Generated<number>;
-  protocol: "aave" | "fluid" | "fluid-t2" | "fluid-t3" | "fluid-t4";
+  protocol: "aave" | "fluid" | "fluid-t2" | "fluid-t3" | "fluid-t4" | "aave-v4";
   preset_id: string;
   magnitude_pct: Numeric;
   position_a_id: string;
