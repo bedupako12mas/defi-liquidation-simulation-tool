@@ -15,7 +15,7 @@ import {
   type PositionSnapshot,
   type KillPriceResult,
   type MarketConcentrationEntry,
-  type Protocol,
+  type DrilldownProtocol,
 } from "@/lib/api/simulate";
 import type { ShockPreset } from "@/lib/api/meta";
 import { InfoTooltip } from "@/components/shared/InfoTooltip";
@@ -32,13 +32,13 @@ const STATE_LABEL: Record<PositionSnapshot["state"], string> = {
 };
 
 /** Identifies which (preset, magnitude, protocol) combination a fetched result belongs to. */
-function requestKey(presetId: ShockPreset["id"], magnitudePct: number, protocol: Protocol): string {
+function requestKey(presetId: ShockPreset["id"], magnitudePct: number, protocol: DrilldownProtocol): string {
   return `${presetId}|${magnitudePct}|${protocol}`;
 }
 
 /** Identifies a (preset, protocol) result - kill-price is magnitude-independent (it scans
  *  the whole range itself), so it's keyed without magnitudePct, unlike requestKey above. */
-function presetProtocolKey(presetId: ShockPreset["id"], protocol: Protocol): string {
+function presetProtocolKey(presetId: ShockPreset["id"], protocol: DrilldownProtocol): string {
   return `${presetId}|${protocol}`;
 }
 
@@ -95,7 +95,7 @@ function LtvLadder({
 }
 
 export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] }) {
-  const [protocol, setProtocol] = useState<Protocol>("aave");
+  const [protocol, setProtocol] = useState<DrilldownProtocol>("aave");
   // sliderValue updates on every drag event (immediate UI feedback); magnitudePct - the
   // value that actually drives fetches - only catches up 400ms after dragging settles.
   // Without this, /api/positions and /api/market-concentration each fire once per pixel
@@ -211,7 +211,7 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
     <div>
       <div className="controls-row">
         <div className="pill-group">
-          {(["aave", "fluid"] as const).map((p) => (
+          {(["aave", "fluid", "aave-v4"] as const).map((p) => (
             <button
               key={p}
               type="button"
@@ -219,7 +219,7 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
               data-active={protocol === p}
               onClick={() => setProtocol(p)}
             >
-              {p === "aave" ? "Aave V3" : "Fluid T1"}
+              {p === "aave" ? "Aave V3" : p === "fluid" ? "Fluid T1" : "Aave V4"}
             </button>
           ))}
         </div>
@@ -347,13 +347,13 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
           {markets && markets.length > 0 && (
             <div style={{ marginTop: "1rem" }}>
               <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
-                At-risk debt by {protocol === "aave" ? "reserve" : "vault"} (top 5) - each
+                At-risk debt by {protocol === "fluid" ? "vault" : "reserve"} (top 5) - each
                 protocol&apos;s own isolated-market unit, not a forced-common grouping.
               </p>
               <table>
                 <thead>
                   <tr>
-                    <th>{protocol === "aave" ? "Reserve" : "Vault"}</th>
+                    <th>{protocol === "fluid" ? "Vault" : "Reserve"}</th>
                     <th>At-risk debt (USD)</th>
                   </tr>
                 </thead>

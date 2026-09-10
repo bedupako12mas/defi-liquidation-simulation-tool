@@ -8,7 +8,7 @@
 
 import fixtures from "./fixtures.generated.json";
 import type { MetaResponse, ShockPreset } from "../meta";
-import type { Protocol, PositionSnapshot, SweepPoint, KillPriceResult, MarketConcentrationEntry } from "../simulate";
+import type { Protocol, DrilldownProtocol, PositionSnapshot, SweepPoint, KillPriceResult, MarketConcentrationEntry } from "../simulate";
 import type { ValidationProtocol, ValidationResult } from "../validation";
 import type { ProfitabilityProtocol, LiquidationProfitability } from "../profitability";
 import type { ChainedProtocol, ChainedLiquidationResult } from "../chainedLiquidation";
@@ -58,11 +58,16 @@ function nearestMagnitudeKey(available: string[], magnitudePct: number): string 
   return best;
 }
 
+// aave-v4 has no fixtures generated for it (generate-mock-fixtures.ts only runs the
+// engine for "aave"/"fluid" - see its own top comment) - mock mode returns a real,
+// honest empty result for it rather than fabricating rows, the same way the live API
+// returns [] when no aave-v4 snapshot has been synced yet (routes/positions.ts).
 export async function getMockPositionSnapshot(
   presetId: string,
   magnitudePct: number,
-  protocol: Protocol
+  protocol: DrilldownProtocol
 ): Promise<PositionSnapshot[]> {
+  if (protocol === "aave-v4") return [];
   const forPreset = data.positionSnapshots[presetId];
   if (!forPreset) return [];
   const byMagnitude = forPreset[protocol];
@@ -71,7 +76,8 @@ export async function getMockPositionSnapshot(
   return byMagnitude[key] ?? [];
 }
 
-export async function getMockKillPrices(presetId: string, protocol: Protocol): Promise<KillPriceResult[]> {
+export async function getMockKillPrices(presetId: string, protocol: DrilldownProtocol): Promise<KillPriceResult[]> {
+  if (protocol === "aave-v4") return [];
   const forPreset = data.killPrices[presetId];
   if (!forPreset) return [];
   return forPreset[protocol];
@@ -230,8 +236,9 @@ export async function getMockFluidT4Shock(): Promise<FluidT4ShockResult[]> {
 export async function getMockMarketConcentration(
   presetId: string,
   magnitudePct: number,
-  protocol: Protocol
+  protocol: DrilldownProtocol
 ): Promise<MarketConcentrationEntry[]> {
+  if (protocol === "aave-v4") return [];
   const forPreset = data.marketConcentration[presetId];
   if (!forPreset) return [];
   const byMagnitude = forPreset[protocol];

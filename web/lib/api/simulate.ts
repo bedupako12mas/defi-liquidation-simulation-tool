@@ -29,6 +29,13 @@ import { API_BASE, USE_MOCK, type ShockPreset } from "./meta";
 
 export type Protocol = "aave" | "fluid";
 
+// The three drilldown endpoints below (/api/positions, /api/kill-price,
+// /api/market-concentration) also serve aave-v4 (see api/src/routes/positions.ts and
+// analytics.ts) - real V4 positions reuse the same engine Position shape as V3. The SSE
+// sweep stream above does NOT: it only ever emits "aave"|"fluid" (Protocol, unchanged),
+// so this is deliberately a separate, wider type rather than widening Protocol itself.
+export type DrilldownProtocol = Protocol | "aave-v4";
+
 export interface SweepPoint {
   magnitudePct: number; // e.g. -23.4 means -23.4%
   liquidatableCollateralUsd: number;
@@ -57,7 +64,7 @@ export type PositionState = "healthy" | "liquidatable" | "eligible" | "toxic";
 
 export interface PositionSnapshot {
   id: string;
-  protocol: Protocol;
+  protocol: DrilldownProtocol;
   collateralUsd: number;
   debtUsd: number;
   healthFactor: number | null; // null when the position carries no debt
@@ -199,7 +206,7 @@ function openMockSimulationStream(
 export async function fetchPositionSnapshot(
   presetId: ShockPreset["id"],
   magnitudePct: number,
-  protocol: Protocol
+  protocol: DrilldownProtocol
 ): Promise<PositionSnapshot[]> {
   if (USE_MOCK) {
     const { getMockPositionSnapshot } = await import("./mock/mockClient");
@@ -222,7 +229,7 @@ export interface KillPriceResult {
   killMagnitudePct: number | null;
 }
 
-export async function fetchKillPrices(presetId: ShockPreset["id"], protocol: Protocol): Promise<KillPriceResult[]> {
+export async function fetchKillPrices(presetId: ShockPreset["id"], protocol: DrilldownProtocol): Promise<KillPriceResult[]> {
   if (USE_MOCK) {
     const { getMockKillPrices } = await import("./mock/mockClient");
     return getMockKillPrices(presetId, protocol);
@@ -244,7 +251,7 @@ export interface MarketConcentrationEntry {
 export async function fetchMarketConcentration(
   presetId: ShockPreset["id"],
   magnitudePct: number,
-  protocol: Protocol
+  protocol: DrilldownProtocol
 ): Promise<MarketConcentrationEntry[]> {
   if (USE_MOCK) {
     const { getMockMarketConcentration } = await import("./mock/mockClient");
