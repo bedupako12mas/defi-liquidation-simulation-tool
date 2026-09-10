@@ -7,7 +7,7 @@ import { sweep } from "../engine/sweep.js";
 import { getCachedReserveConfigs } from "./reserveConfigCache.js";
 import { classifyForShock } from "./aaveShockClassification.js";
 import { classifyFluidAssets } from "./fluidShockClassification.js";
-import { loadLatestAaveSnapshot, loadLatestFluidSnapshot } from "./latestSnapshot.js";
+import { loadLatestAaveSnapshot, loadLatestFluidSnapshot, loadLatestAaveV4Snapshot } from "./latestSnapshot.js";
 import { redactError } from "../rpc/redact.js";
 
 function sendEvent(reply: FastifyReply, event: string, data: unknown) {
@@ -91,12 +91,15 @@ export function registerSimulateRoute(
         const reserveConfigs = await getCachedReserveConfigs(deps.client);
         const assetConfig = Object.fromEntries(reserveConfigs.map((r) => [r.asset, classifyForShock(r)]));
 
-        // Fluid snapshot is optional at the route level - same "no snapshot yet" tolerance
-        // as Aave's own null-check above, just non-fatal here since Aave's stream already
-        // has real data to show. classifyFluidAssets reuses reserveConfigs (already fetched
-        // above for Aave) - no extra RPC call for Fluid's own classification.
+        // Fluid and aave-v4 snapshots are both optional at the route level - same "no
+        // snapshot yet" tolerance as Aave's own null-check above, just non-fatal here since
+        // Aave's stream already has real data to show. classifyFluidAssets reuses
+        // reserveConfigs (already fetched above for Aave) - no extra RPC call for either.
         const fluidSnapshot = await loadLatestFluidSnapshot(deps.db);
         const fluidAssetConfig = fluidSnapshot ? classifyFluidAssets(fluidSnapshot.positions, reserveConfigs) : null;
+
+        const aaveV4Snapshot = await loadLatestAaveV4Snapshot(deps.db);
+        const aaveV4AssetConfig = aaveV4Snapshot ? classifyFluidAssets(aaveV4Snapshot.positions, reserveConfigs) : null;
 
         for (const magnitude of sweepMagnitudes()) {
           if (clientDisconnected) break;
@@ -125,8 +128,21 @@ export function registerSimulateRoute(
               sendEvent(reply, "point", { protocol: "fluid", point: fluidPoint });
             }
           }
-          // If fluidSnapshot is null, no fluid point is emitted this round - omitted, not
-          // faked, same discipline as the comment this replaced.
+
+          if (aaveV4Snapshot && aaveV4AssetConfig) {
+            const [aaveV4Point] = sweep({
+              positions: aaveV4Snapshot.positions,
+              basePrices: aaveV4Snapshot.basePrices,
+              assetConfig: aaveV4AssetConfig,
+              preset,
+              magnitudes: [magnitude],
+            });
+            if (aaveV4Point) {
+              sendEvent(reply, "point", { protocol: "aave-v4", point: aaveV4Point });
+            }
+          }
+          // If a given snapshot is null, no point for it is emitted this round - omitted,
+          // not faked, same discipline as the comment this replaced.
 
           await yieldToEventLoop();
         }
