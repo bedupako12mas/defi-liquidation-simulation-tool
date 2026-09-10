@@ -29,11 +29,15 @@ effort.
 
 ## 1. Git remote + push
 
-Nobody has pushed this anywhere - it's local commits in a worktree.
+`origin` is already set (`git remote -v`) and has real history - this step is about keeping
+it current, not the one-time setup it originally was. Before every deploy attempt, confirm
+local isn't sitting ahead of `origin/main`/`origin/staging` uncommitted-and-unpushed:
 
 ```bash
-git remote add origin <your-github-repo-url>
-git push -u origin <branch>
+git fetch origin
+git status --short --branch   # look for "ahead N" - CI can't gate on, and deploy.yml can't
+                               # deploy, work that hasn't been pushed
+git push origin <branch>
 ```
 
 Then, in the GitHub repo's Settings:
@@ -75,6 +79,15 @@ human's identity, by design.
 
 Not automatable: creating a cluster is a billed, account-scoped action.
 
+**Redeploy note**: a real DOKS cluster existed before and was torn down for cost reasons -
+`k8s/overlays/{staging,prod}/patch-ingress.yaml` still reference that cluster's real ingress
+IP via `nip.io` hostnames (`staging.64-225-85-246.nip.io` / `prod.64-225-85-246.nip.io`, not
+the `.invalid` placeholder `k8s/base/ingress.yaml` ships as its own default). That IP is dead
+now - **replace both hostnames with the new cluster's real ingress IP once it exists** (step
+3.5 below), don't assume the old ones still resolve to anything live. This is also the moment
+to right-size node/replica counts against an actual budget instead of re-creating the same
+shape by default - see the cost-control note at the end of this section.
+
 1. Create the cluster (DO dashboard or `doctl kubernetes cluster create`) - one for staging,
    one for prod, or one cluster with two namespaces (`liquidation-sim-staging` /
    `liquidation-sim-prod`, matching `k8s/overlays/*/kustomization.yaml`) if cost is a
@@ -90,42 +103,63 @@ Not automatable: creating a cluster is a billed, account-scoped action.
    annotations end up preferred instead, `k8s/base/ingress.yaml` needs more than a value
    change - flag that to whoever picks up this repo next.
 4. Provision a container registry (DigitalOcean Container Registry, or GitHub Container
-   Registry) and wire its push credentials into the GitHub Actions secret `deploy.yml`
-   currently stubs out.
+   Registry) and wire its push credentials into the GitHub Actions secrets `deploy.yml`
+   references (`DOCR_REGISTRY`, `DIGITALOCEAN_ACCESS_TOKEN`) - see step 1's Secrets note.
 5. Point real DNS at the cluster's ingress IP through Cloudflare (see step 5), then replace
-   the `.invalid` placeholder hostnames in `k8s/overlays/staging/patch-ingress.yaml` and
-   `k8s/overlays/prod/patch-ingress.yaml` with the real ones.
-6. Once the registry and cluster both exist, replace the stubbed steps in
-   `.github/workflows/deploy.yml` ("Build and push image", "Authenticate to DOKS", "Set image
-   and apply ... overlay") with the real `docker build`/`push`, `doctl`, and
-   `kustomize edit set image` / `kubectl apply -k` commands each stub already sketches in its
-   `echo` lines.
+   the stale/placeholder hostnames in `k8s/overlays/staging/patch-ingress.yaml` and
+   `k8s/overlays/prod/patch-ingress.yaml` with the real, current ones - both files currently
+   reference the OLD torn-down cluster's IP (see the redeploy note above), not the
+   `.invalid` value `k8s/base/ingress.yaml`'s own default uses.
+6. `deploy.yml`'s deploy steps are real now (`docker build`/`push`, `kubectl apply -k`,
+   `kustomize edit set image`) - not stubs, despite this document's old placeholder list
+   below still describing them that way. What's still needed is for the GitHub Actions
+   secrets they reference to actually exist (step 1) and for the registry/cluster from steps
+   above to be real.
+
+**Cost control, given this came down once already**: before recreating the same shape,
+decide deliberately rather than defaulting back to whatever was running before -
+`k8s/base/deployment.yaml` and the overlays' `resources.requests`/`limits` are still
+conservative starting *guesses*, not load-tested numbers (see the placeholder list below).
+Concretely worth deciding up front: node pool size/count, whether staging and prod share one
+small cluster (two namespaces) instead of two separate clusters, whether Vault
+(`k8s/vault/values.yaml`, currently sized to "whatever headroom is left" - `cpu: 50-150m`,
+`memory: 96-192Mi`) runs on the same node pool or gets its own, and a DO billing alert
+threshold configured *before* anything is created, not after.
 
 ---
 
 ## 4. HashiCorp Vault
 
-Not automatable: creating a Vault instance and its policies is exactly the kind of
-credential-issuing action that shouldn't happen without a human deciding what gets access to
-what.
+**Correction**: this section originally described an Injector-based plan that was never
+actually built. The real, deployed shape (`k8s/vault/values.yaml`,
+`scripts/sync-secrets-from-vault.sh`, comments in `k8s/base/deployment.yaml`) is deliberately
+simpler: real standalone Vault (raft storage, real encryption at rest, manual Shamir unseal,
+`injector.enabled: false`) running cluster-internal only (`ClusterIP`, no public ingress),
+with a manual bridge script instead of the Vault Agent Injector - the Injector means a whole
+second deployment (mutating webhook + sidecar injection), real resource cost this
+cost-constrained cluster doesn't have room for. Vault is the real, encrypted, audited source
+of truth for `DATABASE_URL`/`RPC_URL_MAINNET`; delivery to the pod stays the plain k8s
+Secret (`api-secrets`) the deployment already reads via `envFrom` - unchanged either way.
 
-1. Stand up Vault (HCP Vault Dedicated, or self-hosted on a small droplet/cluster - a
-   separate decision from the DOKS cluster running the app).
-2. Enable the Kubernetes auth method, pointed at the DOKS cluster's API server and CA cert.
-3. Write a policy scoped to exactly what `api` needs to read (e.g.
-   `secret/data/api/staging`, `secret/data/api/prod` - separate paths per environment,
-   matching the namespace split above) - not a broad `secret/*` grant.
-4. Create a Kubernetes auth role binding the `api` ServiceAccount (in each namespace) to
-   that policy.
-5. Install the Vault Agent Injector (Helm chart, `hashicorp/vault-k8s`) into the cluster.
-6. Only then, uncomment and fill in the `vault.hashicorp.com/*` annotation block in
-   `k8s/base/deployment.yaml` with the real role name and secret path - it's left commented
-   out on purpose, see the comment already in that file for why a guessed `VAULT_ADDR` would
-   be worse than an absent one.
-7. Revisit the `automountServiceAccountToken: false` line in the same file once Vault auth is
-   live - there's a comment flagging that Vault's Kubernetes auth method needs this pod's
-   ServiceAccount token, and it's not yet confirmed whether the Injector supplies its own
-   independent of that setting.
+Not automatable: initializing Vault and writing its policies is exactly the kind of
+credential-issuing action that shouldn't happen without a human deciding what gets access to
+what, and `vault operator init` displays the unseal keys + root token exactly once.
+
+1. `helm install vault hashicorp/vault -f k8s/vault/values.yaml -n vault --create-namespace`
+   (the chart values are already real and committed - nothing to write here).
+2. `kubectl exec vault-0 -n vault -- vault operator init` - **store the unseal keys and root
+   token somewhere real immediately** (a password manager, not this repo, not a chat log).
+   This is shown exactly once.
+3. `kubectl exec vault-0 -n vault -- vault operator unseal` (repeat with a threshold number of
+   the real unseal keys from step 2).
+4. Enable the KV v2 secrets engine at `liquidation-sim/` and write the two real per-environment
+   secrets: `vault kv put liquidation-sim/staging/api-secrets DATABASE_URL=... RPC_URL_MAINNET=...`
+   (and the same for `prod`) - separate paths per environment, matching the namespace split.
+5. Write a `liquidation-sim-read` policy scoped to exactly those two paths (not a broad
+   `secret/*` grant), and issue a token against it for `scripts/sync-secrets-from-vault.sh`
+   to use (`VAULT_READ_TOKEN=<token> ./scripts/sync-secrets-from-vault.sh staging`, then
+   `prod`) - re-run after any secret rotation or any `kubectl apply` that might reset the
+   Secret.
 
 ---
 
@@ -147,11 +181,18 @@ what.
 ## 6. BetterStack
 
 1. Create an uptime monitor against each environment's `/health` endpoint once real hostnames
-   exist.
-2. Wire up the metric context.md §9 specifically calls out as meaningful: **indexer lag in
-   blocks** - this requires the indexer (context.md §8's architecture diagram, not yet built)
-   to emit that metric somewhere BetterStack can scrape/receive it. Nothing in this
-   commit set builds the indexer; this is a forward pointer, not a completed step.
+   exist. **Correction**: `/health` (`api/src/server.ts`) is real and running, but currently
+   just returns `{ ok: true }` unconditionally - it doesn't check DB or RPC connectivity, even
+   though both throw at process startup if misconfigured. Worth deepening it (a cheap
+   `SELECT 1`) before wiring an uptime monitor to it, so "healthy" means something beyond "the
+   process didn't crash."
+2. Wire up the metric context.md §9 calls out as meaningful: **indexer lag in blocks**.
+   **Correction**: the indexers themselves (`aaveIndexer.ts`, `fluidIndexer.ts`,
+   `aaveV4Indexer.ts`, `indexer_progress` table) are real and have been running all session -
+   this part of the original doc was written before they existed and is stale. What's still
+   genuinely missing is a route exposing `indexer_progress.last_indexed_block` vs. the current
+   chain tip as a scrapeable/receivable metric - a small, real, scoped addition, not a
+   rebuild.
 3. Configure alerting destinations (who gets paged) - a people/process decision, not a config
    file.
 
@@ -165,13 +206,19 @@ Grep-able by searching for `TODO` and `PLACEHOLDER` across the repo, but summari
   `docker pull` + `docker inspect` against a real registry.
 - `.github/workflows/ci.yml` - `aquasecurity/trivy-action@0.28.0` and
   `gitleaks/gitleaks-action@v2` referenced by tag, not digest, for the same reason.
-- `.github/workflows/deploy.yml` - every actual deploy step is a stub that echoes intent and
-  exits 1; no registry, cluster, or secret exists for it to act on yet.
+- `.github/workflows/deploy.yml` - **correction**: the deploy steps are real now (`docker
+  build`/`push`, `kubectl apply -k`, `kustomize edit set image`), not stubs - this claim was
+  accurate when first written and has since drifted stale. What's still missing is the
+  registry/cluster/secrets themselves (see section 3).
 - `k8s/base/deployment.yaml` - `image: api:unset` (deliberately inert placeholder, see
-  comment in the file); Vault Agent annotations left absent, not guessed.
-- `k8s/base/ingress.yaml`, `k8s/overlays/*/patch-ingress.yaml` - hostnames use the
-  `.invalid` TLD (IANA-reserved, guaranteed not to resolve), and `ingressClassName: nginx`
-  is an assumption to confirm once the cluster exists.
+  comment in the file); Vault Agent Injector annotations correctly left absent (the real
+  setup doesn't use the Injector at all - see the corrected Vault section above).
+- `k8s/base/ingress.yaml` - its own default hostname still uses the `.invalid` TLD
+  (IANA-reserved, guaranteed not to resolve) - correct and unchanged. The overlays
+  (`k8s/overlays/*/patch-ingress.yaml`) currently reference the *previous, now-torn-down*
+  cluster's real IP instead - see the redeploy note in section 3, replace with the new
+  cluster's real IP once it exists. `ingressClassName: nginx` is still an assumption to
+  reconfirm once the new cluster exists.
 - `k8s/base/deployment.yaml` and both overlays' `resources.requests`/`resources.limits` -
   conservative starting guesses, not load-tested numbers.
 - `.github/dependabot.yml` - the `api` and `web` directory entries will show as errored
