@@ -21,9 +21,19 @@ useDefault = true
 # project-specific rule here if a real proprietary secret format shows up later (e.g. a
 # BetterStack or Vault-issued token with a recognizable prefix) - don't add one speculatively
 # for a format that doesn't exist yet.
+#
+# UPDATE 2026-09-10 (live-caught, not hypothetical): the prediction above turned out wrong
+# for one specific shape. The default `generic-api-key` rule's high-entropy heuristic flags
+# real, PUBLIC Ethereum addresses (0x + 40 hex chars) throughout this codebase's mock data
+# and investigation scripts - 15 real findings on the first full-history CI run, all of them
+# real on-chain contract/token addresses (e.g. a real wstETH token address), none of them
+# actual secrets. Addresses are inherently high-entropy-looking 40-hex-char strings, and a
+# blockchain-heavy codebase is full of them by design - allowlisted by regex below rather
+# than allowlisting each new address's commit/line individually, since new real addresses
+# will keep getting added as this project grows.
 
 [allowlist]
-description = "Paths that are expected to contain synthetic/example data, not real secrets"
+description = "Paths and patterns that are expected to contain synthetic/public data, not real secrets"
 paths = [
   # app/api/src/fixtures - explicitly synthetic data per docs/demo/DEMO_GUIDE.md §2
   # ("Everything under fixtures/ is synthetic scaffolding"). Not a secrets concern, but
@@ -34,4 +44,10 @@ paths = [
   # the .gitignore carve-out for .env.example / .env.*.example.
   '''\.env\.example$''',
   '''\.env\..*\.example$''',
+]
+regexes = [
+  # Standard 20-byte Ethereum address (0x + 40 hex chars, EIP-55 checksummed or not) - real,
+  # public on-chain data (contract/token/vault addresses), never a secret by construction.
+  # See the UPDATE comment above for the real, live-caught finding this closes.
+  '''^0x[a-fA-F0-9]{40}$''',
 ]
