@@ -15,7 +15,7 @@ import {
   type PositionSnapshot,
   type KillPriceResult,
   type MarketConcentrationEntry,
-  type DrilldownProtocol,
+  type Protocol,
 } from "@/lib/api/simulate";
 import type { ShockPreset } from "@/lib/api/meta";
 import { InfoTooltip } from "@/components/shared/InfoTooltip";
@@ -32,13 +32,13 @@ const STATE_LABEL: Record<PositionSnapshot["state"], string> = {
 };
 
 /** Identifies which (preset, magnitude, protocol) combination a fetched result belongs to. */
-function requestKey(presetId: ShockPreset["id"], magnitudePct: number, protocol: DrilldownProtocol): string {
+function requestKey(presetId: ShockPreset["id"], magnitudePct: number, protocol: Protocol): string {
   return `${presetId}|${magnitudePct}|${protocol}`;
 }
 
 /** Identifies a (preset, protocol) result - kill-price is magnitude-independent (it scans
  *  the whole range itself), so it's keyed without magnitudePct, unlike requestKey above. */
-function presetProtocolKey(presetId: ShockPreset["id"], protocol: DrilldownProtocol): string {
+function presetProtocolKey(presetId: ShockPreset["id"], protocol: Protocol): string {
   return `${presetId}|${protocol}`;
 }
 
@@ -95,7 +95,7 @@ function LtvLadder({
 }
 
 export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] }) {
-  const [protocol, setProtocol] = useState<DrilldownProtocol>("aave");
+  const [protocol, setProtocol] = useState<Protocol>("aave");
   // sliderValue updates on every drag event (immediate UI feedback); magnitudePct - the
   // value that actually drives fetches - only catches up 400ms after dragging settles.
   // Without this, /api/positions and /api/market-concentration each fire once per pixel

@@ -97,6 +97,7 @@ export function OverviewTab() {
           <StreamedChart
             aave={stream.aave}
             fluid={stream.fluid}
+            aaveV4={stream.aaveV4}
             metric={metric}
             status={stream.status}
             lastChunkLatencyMs={stream.lastChunkLatencyMs}

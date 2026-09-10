@@ -28,6 +28,7 @@ export type StreamStatus = "idle" | "streaming" | "done" | "error";
 export interface SimulationStreamState {
   aave: SweepPoint[];
   fluid: SweepPoint[];
+  aaveV4: SweepPoint[];
   status: StreamStatus;
   error: string | null;
   preset: ShockPreset | null;
@@ -44,6 +45,7 @@ function emptyState(presetId: ShockPreset["id"], status: StreamStatus): Internal
     presetId,
     aave: [],
     fluid: [],
+    aaveV4: [],
     status,
     error: null,
     preset: null,
@@ -72,6 +74,7 @@ export function useSimulationStream(presetId: ShockPreset["id"] | null): Simulat
             status: "streaming",
             aave: protocol === "aave" ? [...base.aave, point] : base.aave,
             fluid: protocol === "fluid" ? [...base.fluid, point] : base.fluid,
+            aaveV4: protocol === "aave-v4" ? [...base.aaveV4, point] : base.aaveV4,
             lastChunkLatencyMs: latency,
             pointsReceived: base.pointsReceived + 1,
           };
@@ -95,7 +98,7 @@ export function useSimulationStream(presetId: ShockPreset["id"] | null): Simulat
   }, [presetId]);
 
   if (!presetId) {
-    return { aave: [], fluid: [], status: "idle", error: null, preset: null, lastChunkLatencyMs: null, pointsReceived: 0 };
+    return { aave: [], fluid: [], aaveV4: [], status: "idle", error: null, preset: null, lastChunkLatencyMs: null, pointsReceived: 0 };
   }
   if (state && state.presetId === presetId) return state;
   // New preset requested, first chunk hasn't arrived (or is being dispatched) yet.

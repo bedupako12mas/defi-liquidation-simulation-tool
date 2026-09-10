@@ -8,7 +8,7 @@
 
 import fixtures from "./fixtures.generated.json";
 import type { MetaResponse, ShockPreset } from "../meta";
-import type { Protocol, DrilldownProtocol, PositionSnapshot, SweepPoint, KillPriceResult, MarketConcentrationEntry } from "../simulate";
+import type { Protocol, PositionSnapshot, SweepPoint, KillPriceResult, MarketConcentrationEntry } from "../simulate";
 import type { ValidationProtocol, ValidationResult } from "../validation";
 import type { ProfitabilityProtocol, LiquidationProfitability } from "../profitability";
 import type { ChainedProtocol, ChainedLiquidationResult } from "../chainedLiquidation";
@@ -38,7 +38,11 @@ export function getMockPreset(presetId: string): ShockPreset | undefined {
   return data.meta.presets.find((p) => p.id === presetId);
 }
 
+// aave-v4 has no fixtures generated for it (generate-mock-fixtures.ts only runs the engine
+// for "aave"/"fluid") - mock mode streams a real, honest empty third series rather than
+// fabricating sweep points, same discipline as the drilldown mocks below.
 export function getMockSweep(presetId: string, protocol: Protocol): SweepPoint[] {
+  if (protocol === "aave-v4") return [];
   const forPreset = data.sweeps[presetId];
   if (!forPreset) return [];
   return forPreset[protocol];
@@ -65,7 +69,7 @@ function nearestMagnitudeKey(available: string[], magnitudePct: number): string 
 export async function getMockPositionSnapshot(
   presetId: string,
   magnitudePct: number,
-  protocol: DrilldownProtocol
+  protocol: Protocol
 ): Promise<PositionSnapshot[]> {
   if (protocol === "aave-v4") return [];
   const forPreset = data.positionSnapshots[presetId];
@@ -76,7 +80,7 @@ export async function getMockPositionSnapshot(
   return byMagnitude[key] ?? [];
 }
 
-export async function getMockKillPrices(presetId: string, protocol: DrilldownProtocol): Promise<KillPriceResult[]> {
+export async function getMockKillPrices(presetId: string, protocol: Protocol): Promise<KillPriceResult[]> {
   if (protocol === "aave-v4") return [];
   const forPreset = data.killPrices[presetId];
   if (!forPreset) return [];
@@ -236,7 +240,7 @@ export async function getMockFluidT4Shock(): Promise<FluidT4ShockResult[]> {
 export async function getMockMarketConcentration(
   presetId: string,
   magnitudePct: number,
-  protocol: DrilldownProtocol
+  protocol: Protocol
 ): Promise<MarketConcentrationEntry[]> {
   if (protocol === "aave-v4") return [];
   const forPreset = data.marketConcentration[presetId];

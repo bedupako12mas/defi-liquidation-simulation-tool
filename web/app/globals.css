@@ -10,6 +10,11 @@
   --border: rgba(11, 11, 11, 0.1);
   --series-aave: #2a78d6;
   --series-fluid: #eb6834;
+  /* Third categorical series (Aave V4) - purple, picked to stay distinct from the existing
+     blue/orange pair AND from the reserved status hues below (green/amber/red are never
+     reused for series identity - see the dataviz skill's "status colors are reserved"
+     rule). */
+  --series-aave-v4: #8452c9;
   --status-critical: #d03b3b;
   --status-warning: #fab219;
   --status-ok: #2f9e5b;
@@ -28,6 +33,7 @@
     --border: rgba(255, 255, 255, 0.1);
     --series-aave: #3987e5;
     --series-fluid: #d95926;
+    --series-aave-v4: #a06fe0;
     --status-critical: #e66767;
     --status-warning: #fab219;
     --status-ok: #46b579;
@@ -46,6 +52,7 @@
   --border: rgba(255, 255, 255, 0.1);
   --series-aave: #3987e5;
   --series-fluid: #d95926;
+  --series-aave-v4: #a06fe0;
   --status-critical: #e66767;
   --status-warning: #fab219;
   --status-ok: #46b579;
