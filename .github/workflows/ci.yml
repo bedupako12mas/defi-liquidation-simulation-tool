@@ -178,28 +178,35 @@ jobs:
       # CIS Docker Benchmark (image scanning) + OWASP A03: fail the build on known HIGH/
       # CRITICAL vulnerabilities in the base image or dependency layers before anything is
       # pushed to a registry a deploy job could pull from.
-      # TODO: pin this action to a commit digest (same registry-access limitation noted in
-      # api/Dockerfile applies to resolving third-party Action digests from here).
-      # Real, live-caught finding (2026-09-10): this step failed (exit code 1) with zero
-      # code-scanning alerts created and zero findings in an independent local reproduction
-      # using the exact same trivy version against the exact same image fingerprint (Debian
-      # 12.15, pkg_num=88) - not a real vulnerability. `scanners:` was never set, so the
-      # action's secret/misconfig scanners ran unstated by default alongside vuln scanning,
-      # even though this job's whole purpose (see comment above) is vulnerability scanning
-      # only - gitleaks already covers secrets, comprehensively, against full git history,
-      # with its own tuned allowlist (gitleaks.toml). Scoped explicitly to close that gap,
-      # not just to chase this specific failure.
+      #
+      # Real, live-caught finding (2026-09-10): aquasecurity/trivy-action@v0.36.0 failed
+      # (exit code 1) on three separate real runs, across two different underlying
+      # node:22-slim digests (the base tag had silently moved between builds - a real,
+      # live confirmation of the mutable-tag risk api/Dockerfile's own comment warns
+      # about), with zero code-scanning alerts ever created and zero findings in an
+      # independent local reproduction using the exact same trivy version (v0.70.0)
+      # against the exact same image fingerprint (Debian 12.15, pkg_num=88, both cached
+      # and freshly-pulled base images) - not a real vulnerability, a bug in the action
+      # wrapper's own exit-code handling (every failing run's log ends immediately after
+      # the routine "newer trivy version available" notice, which the raw binary itself
+      # prints too without ever failing). Replaced with a direct install+run of the exact
+      # same binary/flags already verified to work correctly and consistently, rather
+      # than keep guessing at a third-party wrapper's internals.
+      - name: Install Trivy
+        if: steps.exists.outputs.found == 'true'
+        run: |
+          curl -sL https://github.com/aquasecurity/trivy/releases/download/v0.70.0/trivy_0.70.0_Linux-64bit.tar.gz | tar xz trivy
+          sudo mv trivy /usr/local/bin/trivy
+
       - name: Trivy scan
         if: steps.exists.outputs.found == 'true'
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: api:ci
-          format: sarif
-          output: trivy-results.sarif
-          scanners: vuln
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          ignore-unfixed: true
+        run: |
+          trivy image \
+            --format sarif --output trivy-results.sarif \
+            --scanners vuln --pkg-types os,library \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            --skip-version-check \
+            api:ci
 
       - name: Upload Trivy results to code scanning
         if: steps.exists.outputs.found == 'true' && always()
