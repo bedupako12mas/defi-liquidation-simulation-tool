@@ -180,6 +180,15 @@ jobs:
       # pushed to a registry a deploy job could pull from.
       # TODO: pin this action to a commit digest (same registry-access limitation noted in
       # api/Dockerfile applies to resolving third-party Action digests from here).
+      # Real, live-caught finding (2026-09-10): this step failed (exit code 1) with zero
+      # code-scanning alerts created and zero findings in an independent local reproduction
+      # using the exact same trivy version against the exact same image fingerprint (Debian
+      # 12.15, pkg_num=88) - not a real vulnerability. `scanners:` was never set, so the
+      # action's secret/misconfig scanners ran unstated by default alongside vuln scanning,
+      # even though this job's whole purpose (see comment above) is vulnerability scanning
+      # only - gitleaks already covers secrets, comprehensively, against full git history,
+      # with its own tuned allowlist (gitleaks.toml). Scoped explicitly to close that gap,
+      # not just to chase this specific failure.
       - name: Trivy scan
         if: steps.exists.outputs.found == 'true'
         uses: aquasecurity/trivy-action@v0.36.0
@@ -187,6 +196,7 @@ jobs:
           image-ref: api:ci
           format: sarif
           output: trivy-results.sarif
+          scanners: vuln
           severity: HIGH,CRITICAL
           exit-code: "1"
           ignore-unfixed: true
