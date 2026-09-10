@@ -138,8 +138,9 @@ simpler: real standalone Vault (raft storage, real encryption at rest, manual Sh
 with a manual bridge script instead of the Vault Agent Injector - the Injector means a whole
 second deployment (mutating webhook + sidecar injection), real resource cost this
 cost-constrained cluster doesn't have room for. Vault is the real, encrypted, audited source
-of truth for `DATABASE_URL`/`RPC_URL_MAINNET`; delivery to the pod stays the plain k8s
-Secret (`api-secrets`) the deployment already reads via `envFrom` - unchanged either way.
+of truth for `DATABASE_URL`/`RPC_URL_MAINNET`/Postgres's own admin credentials; delivery to
+the pod stays the plain k8s Secrets (`api-secrets`, `postgres-secrets`) the deployment and
+`postgres.yaml`'s StatefulSet already read via `envFrom` - unchanged either way.
 
 Not automatable: initializing Vault and writing its policies is exactly the kind of
 credential-issuing action that shouldn't happen without a human deciding what gets access to
@@ -152,10 +153,23 @@ what, and `vault operator init` displays the unseal keys + root token exactly on
    This is shown exactly once.
 3. `kubectl exec vault-0 -n vault -- vault operator unseal` (repeat with a threshold number of
    the real unseal keys from step 2).
-4. Enable the KV v2 secrets engine at `liquidation-sim/` and write the two real per-environment
-   secrets: `vault kv put liquidation-sim/staging/api-secrets DATABASE_URL=... RPC_URL_MAINNET=...`
-   (and the same for `prod`) - separate paths per environment, matching the namespace split.
-5. Write a `liquidation-sim-read` policy scoped to exactly those two paths (not a broad
+4. Enable the KV v2 secrets engine at `liquidation-sim/` and write, per environment, **two**
+   separate real secrets (Postgres's own admin credentials are a distinct secret consumer
+   from the api's runtime env, kept apart on purpose - see `scripts/sync-secrets-from-vault.sh`):
+   ```bash
+   vault kv put liquidation-sim/staging/postgres-secrets \
+     POSTGRES_USER=liquidation_sim POSTGRES_PASSWORD=<generate a real random one> POSTGRES_DB=liquidation_sim
+   vault kv put liquidation-sim/staging/api-secrets \
+     DATABASE_URL="postgres://liquidation_sim:<same password as above>@postgres.liquidation-sim-staging.svc.cluster.local:5432/liquidation_sim" \
+     RPC_URL_MAINNET=<your real RPC URL>
+   ```
+   (and the same two commands for `prod`, with its own separately-generated password and
+   `liquidation-sim-prod` in the hostname). **Note the DATABASE_URL shape has changed** from
+   the previous Managed Database version: no `sslmode` param - self-hosted Postgres here is
+   cluster-internal only (no public endpoint, no untrusted cert to work around), and the
+   hostname is the in-cluster Service DNS name (`postgres.<namespace>.svc.cluster.local`),
+   not a `db.ondigitalocean.com` hostname.
+5. Write a `liquidation-sim-read` policy scoped to exactly those paths (not a broad
    `secret/*` grant), and issue a token against it for `scripts/sync-secrets-from-vault.sh`
    to use (`VAULT_READ_TOKEN=<token> ./scripts/sync-secrets-from-vault.sh staging`, then
    `prod`) - re-run after any secret rotation or any `kubectl apply` that might reset the
