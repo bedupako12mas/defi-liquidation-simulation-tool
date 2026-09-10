@@ -11,7 +11,7 @@
 
 import { API_BASE, USE_MOCK } from "./meta";
 
-export type ChainedProtocol = "aave" | "fluid" | "fluid-t2" | "fluid-t3" | "fluid-t4";
+export type ChainedProtocol = "aave" | "fluid" | "fluid-t2" | "fluid-t3" | "fluid-t4" | "aave-v4";
 
 export interface ChainedLiquidationResult {
   protocol: ChainedProtocol;

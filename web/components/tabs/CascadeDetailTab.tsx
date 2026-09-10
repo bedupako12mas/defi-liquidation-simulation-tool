@@ -190,6 +190,7 @@ export function CascadeDetailTab() {
   const fluidT2Chained = chained?.filter((r) => r.protocol === "fluid-t2") ?? [];
   const fluidT3Chained = chained?.filter((r) => r.protocol === "fluid-t3") ?? [];
   const fluidT4Chained = chained?.filter((r) => r.protocol === "fluid-t4") ?? [];
+  const aaveV4Chained = chained?.filter((r) => r.protocol === "aave-v4") ?? [];
 
   return (
     <div>
@@ -215,13 +216,19 @@ export function CascadeDetailTab() {
             real transaction at all?
             <br />
             <br />
-            <strong>Technical:</strong> Aave: A&apos;s real <code>liquidationCall()</code> is
-            mined, then B&apos;s <code>validateAaveLiquidation</code> result is compared
+            <strong>Technical:</strong> Aave V3: A&apos;s real <code>liquidationCall()</code>{" "}
+            is mined, then B&apos;s <code>validateAaveLiquidation</code> result is compared
             before vs. after on the same fork - A and B are two independent real positions
             sharing the same (collateral, debt) reserve pair. Fluid: <code>liquidate()</code>{" "}
             is vault-level and tick-based, not per-user, so A and B are the SAME identical
             full-vault request, tested before vs. after A is mined - the real diff measures
-            tick consumption, not per-position drift.
+            tick consumption, not per-position drift. Aave V4: a genuinely different real
+            question, since V4 liquidates toward a real{" "}
+            <code>LiquidationConfig.targetHealthFactor</code> rather than V3&apos;s fixed
+            close factor - A and B here are the SAME real position, re-checked before vs.
+            after its own real mined liquidation, testing whether one real liquidation
+            actually restores it above the target health factor as V4&apos;s own design
+            intends.
           </InfoTooltip>
         </h2>
         {chainedError && <div className="banner">Error talking to the API: {chainedError}.</div>}
@@ -281,6 +288,28 @@ export function CascadeDetailTab() {
           the same failure between two otherwise-identical runs.
         </p>
         {chained === null && !chainedError ? <p className="loading">Loading...</p> : <ChainedLiquidationTable rows={fluidT4Chained} />}
+        <h3 style={{ marginTop: "1.75rem" }}>Aave V4</h3>
+        <p className="preset-note" style={{ marginTop: 0 }}>
+          A different real question from V3/Fluid: does V4&apos;s real target-health-factor
+          liquidation design (confirmed from its own source, not V3&apos;s fixed close
+          factor) actually restore a real position above health factor 1.0 in ONE real
+          liquidation? &ldquo;A&rdquo; and &ldquo;B&rdquo; here are the same real position,
+          re-checked before vs. after its own real mined <code>liquidationCall()</code>.
+          Genuinely liquidatable real V4 positions are rare (a real, competitive liquidation
+          market clears them fast - confirmed live, one candidate found earlier in this same
+          session had already been resolved by the time this ran again a few hours later), so
+          when none exists at 0% shock, a small real price-shock search finds whichever real
+          position sits closest to the threshold and shocks just enough to cross it -
+          disclosed via a nonzero shock magnitude below, not silently treated the same as a
+          genuinely-already-liquidatable one. A real, informative first result from exactly
+          this path: the isolated (pre-mining) check predicted a clean liquidation, but the
+          real mined transaction reverted with V4&apos;s actual <code>MustNotLeaveDust</code>{" "}
+          rule - a real, if small, divergence between a stateless prediction and what
+          actually gets included in a block, the same category of effect Aave V3&apos;s own
+          section above discloses as reserve-index drift, just landing as a hard revert here
+          instead of a small repaid-amount difference.
+        </p>
+        {chained === null && !chainedError ? <p className="loading">Loading...</p> : <ChainedLiquidationTable rows={aaveV4Chained} />}
       </div>
 
       <div className="card">
