@@ -60,11 +60,8 @@ spec:
           envFrom:
             - secretRef:
                 name: api-secrets
-          env:
-            # Same TEMPORARY reasoning as deployment.yaml's identical env var - see that
-            # file's comment for the real fix to revisit alongside the Vault migration.
-            - name: NODE_TLS_REJECT_UNAUTHORIZED
-              value: "0"
+          # NODE_TLS_REJECT_UNAUTHORIZED=0 removed - see deployment.yaml's identical
+          # comment, same reasoning applies here unchanged.
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false

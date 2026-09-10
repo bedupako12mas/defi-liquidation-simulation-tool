@@ -101,21 +101,12 @@ spec:
           env:
             - name: PORT
               value: "4000"
-            # TEMPORARY, same reasoning as sslmode=require (not verify-full) in
-            # docs/decisions.md's DB-layer commit: DigitalOcean managed Postgres's
-            # certificate isn't in Node's default trusted root store, and recent
-            # pg-connection-string versions now treat sslmode=require as strict
-            # verify-full semantics by default, which fails with "self-signed
-            # certificate in certificate chain" otherwise - confirmed live while
-            # running the migration against real prod Postgres. This disables TLS
-            # certificate verification process-wide (blunt, not scoped to just the DB
-            # connection) - acceptable for tonight (connection is still encrypted, not
-            # plaintext), not the end state. Revisit alongside the Vault migration:
-            # either pass the real DO CA cert to `pg`'s `ssl.ca` option, or add
-            # `uselibpqcompat=true` to the connection string for the old lenient
-            # `require` behavior instead of this global flag.
-            - name: NODE_TLS_REJECT_UNAUTHORIZED
-              value: "0"
+          # NODE_TLS_REJECT_UNAUTHORIZED=0 (the previous, disclosed-as-temporary workaround
+          # for the old DigitalOcean Managed Database's untrusted certificate) is removed,
+          # not carried forward - postgres.yaml's self-hosted Postgres is cluster-internal
+          # only, connected to over plain TCP (DATABASE_URL has no sslmode param), so there
+          # is no cert-trust problem left to work around. See docs/decisions.md for the
+          # original finding this closes.
           securityContext:
             readOnlyRootFilesystem: true # CIS Docker/K8s Benchmark - paired with the Dockerfile writing nothing to its own image at runtime
             allowPrivilegeEscalation: false

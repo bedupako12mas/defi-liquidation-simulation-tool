@@ -10,3 +10,5 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
+  - postgres.yaml
+  - postgres-backup-cronjob.yaml

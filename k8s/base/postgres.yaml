@@ -1,0 +1,122 @@
+# k8s/base/postgres.yaml
+#
+# Self-hosted Postgres, replacing the previous DigitalOcean Managed Database (torn down for
+# cost - see DEPLOYMENT.md's redeploy note). Runs on the same do-block-storage class Vault
+# already uses (k8s/vault/values.yaml) - the established pattern for a self-hosted stateful
+# service on this cluster, not a new one. ClusterIP-only (well, headless - see the Service
+# below), same as api's own Service: nothing about this needs to be reachable outside the
+# cluster, so there's no TLS-cert-trust concern the way the previous Managed Database had
+# (see deployment.yaml/migrate-job.yaml - the NODE_TLS_REJECT_UNAUTHORIZED=0 workaround
+# that existed for that specific reason is removed now that it no longer applies).
+#
+# One real, disclosed tradeoff of self-hosting instead of a managed database: backups,
+# upgrades, and HA are now this deployment's own responsibility, not DO's. See
+# postgres-backup-cronjob.yaml for the real (if modest) backup story this ships with.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: liquidation-simulator
+spec:
+  serviceName: postgres
+  replicas: 1 # matches the real single-node cluster this runs on - see deployment.yaml's own replica-count comment
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+    spec:
+      automountServiceAccountToken: false # never calls the k8s API, same reasoning as deployment.yaml
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999 # the official postgres image's own "postgres" user - NOT 1000 (api's node:22-slim user)
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          # Not digest-pinned yet - same disclosed placeholder discipline as
+          # api/Dockerfile's node:22-slim (see DEPLOYMENT.md's placeholder list). Major
+          # version matches what the previous Managed Database ran, to minimize migration
+          # friction for anything that assumed Postgres 18 features.
+          image: postgres:18-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgres-secrets # POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB - see scripts/sync-secrets-from-vault.sh
+          env:
+            # A subdirectory, not the raw mount point - avoids a real, common initdb
+            # failure ("PGDATA directory contains a lost+found") some block storage
+            # classes produce on a fresh volume, not a hypothetical concern.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)"]
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: do-block-storage
+        resources:
+          requests:
+            storage: 10Gi
+---
+# Headless Service (clusterIP: None is required StatefulSet Service shape, not a typo) -
+# gives api's DATABASE_URL a stable DNS name: postgres.<namespace>.svc.cluster.local.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: liquidation-simulator
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

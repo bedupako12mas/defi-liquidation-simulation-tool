@@ -1,0 +1,94 @@
+# k8s/base/postgres-backup-cronjob.yaml
+#
+# The real backup story self-hosting Postgres needs, since it no longer gets a Managed
+# Database's automatic backups for free (see postgres.yaml's own comment on that tradeoff).
+# Daily pg_dump to a SEPARATE PersistentVolumeClaim from the live data volume - deliberately
+# not the same volume, so a problem with the live disk doesn't also take the backups down
+# with it. 14-day retention, pruned by the job itself.
+#
+# Disclosed, not silently treated as solved: this is still cluster-local storage, not an
+# off-cluster copy (e.g. DO Spaces) - a real further improvement if the data is ever
+# valuable enough to justify a second real DO resource + its own credentials for it. Good
+# enough for "self-hosting shouldn't mean zero backups," not equivalent to what a managed
+# service provides.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: backup
+spec:
+  schedule: "0 3 * * *" # daily, 03:00 UTC
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 259200 # 3 days - a few recent runs stay visible via kubectl, not forever
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999 # matches postgres.yaml - same official image, same user
+            runAsGroup: 999
+            fsGroup: 999
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: pg-dump
+              # Same image as postgres.yaml - pg_dump's version must match (or exceed) the
+              # server's major version.
+              image: postgres:18-alpine
+              command:
+                - sh
+                - -c
+                - >-
+                  pg_dump -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" -F c
+                  -f "/backup/$(date +%Y-%m-%dT%H-%M-%S).dump" &&
+                  find /backup -type f -mtime +14 -delete
+              envFrom:
+                - secretRef:
+                    name: postgres-secrets
+              env:
+                # pg_dump's own client auth reads PGPASSWORD, not POSTGRES_PASSWORD (the
+                # server's own startup env var, already brought in by envFrom above) -
+                # explicit alias from the same real secret value, not a second credential.
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secrets
+                      key: POSTGRES_PASSWORD
+              securityContext:
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: "50m"
+                  memory: "64Mi"
+                limits:
+                  cpu: "250m"
+                  memory: "192Mi"
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: postgres-backup
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-backup
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: backup
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: do-block-storage
+  resources:
+    requests:
+      storage: 5Gi
