@@ -1,8 +1,9 @@
-# Real, working hostname - nip.io, same cluster/LB IP as staging (64.225.85.246), a
-# "prod." subdomain prefix so ingress-nginx's host-based routing sends it to this
-# namespace's Ingress rather than staging's. Deliberately not a registered domain behind
-# Cloudflare (see docs/decisions.md's tech-stack entry - assessed and consciously skipped
-# for this deployment's scope).
+# Real, working hostname - nip.io, same cluster/LB IP as staging (139.59.49.28 as of
+# 2026-09-14 - see staging's patch-ingress.yaml comment for why this changed from the old
+# 64.225.85.246), a "prod." subdomain prefix so ingress-nginx's host-based routing sends it
+# to this namespace's Ingress rather than staging's. Deliberately not a registered domain
+# behind Cloudflare (see docs/decisions.md's tech-stack entry - needs a real domain, which
+# doesn't exist yet - explicitly deferred, not an oversight).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -13,7 +14,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
 spec:
   rules:
-    - host: prod.64-225-85-246.nip.io
+    - host: prod.139-59-49-28.nip.io
       http:
         paths:
           - path: /
@@ -25,5 +26,5 @@ spec:
                   name: http
   tls:
     - hosts:
-        - prod.64-225-85-246.nip.io
+        - prod.139-59-49-28.nip.io
       secretName: api-tls-prod

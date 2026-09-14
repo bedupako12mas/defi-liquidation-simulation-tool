@@ -1,0 +1,29 @@
+# k8s/cert-manager/cluster-issuer.yaml
+#
+# Cluster-wide (not per-environment, so it lives outside k8s/overlays/{staging,prod}) -
+# cert-manager itself and this ClusterIssuer are installed once per cluster
+# (`helm install cert-manager jetstack/cert-manager -n cert-manager --create-namespace
+# --set crds.enabled=true`), then referenced by both overlays' patch-ingress.yaml via the
+# `cert-manager.io/cluster-issuer: letsencrypt-prod` annotation already on
+# k8s/overlays/{staging,prod}/patch-ingress.yaml.
+#
+# HTTP-01 challenge (not DNS-01): works against the nip.io hostnames currently in use
+# without needing a real domain/DNS API token - nip.io is publicly resolvable, so Let's
+# Encrypt's HTTP-01 validation (a request to http://<host>/.well-known/acme-challenge/...)
+# reaches this cluster's real ingress-nginx LoadBalancer IP correctly. Revisit if/when a
+# real domain + Cloudflare are wired up (DNS-01 would let ingress-nginx's LB stay fully
+# private behind Cloudflare instead of needing to answer the HTTP-01 challenge directly).
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: bedupako12mas@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx

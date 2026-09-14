@@ -1,9 +1,12 @@
-# Real, working hostname - nip.io (64.225.85.246 is this cluster's real Load Balancer IP,
-# see docs/decisions.md). Deliberately not a registered domain behind Cloudflare (see the
-# tech-stack decisions entry: Cloudflare was assessed and consciously not added for this
-# deployment's scope). This was previously a live-only kubectl patch that a real CI/CD
-# deploy then silently overwrote on every push - committing the real value here is what
-# actually fixes that, not another live patch.
+# Real, working hostname - nip.io (139.59.49.28 is the CURRENT cluster's real ingress-nginx
+# LoadBalancer IP as of 2026-09-14; the cluster was rebuilt and a new LB provisioned, which is
+# why this replaced the previous 64.225.85.246 - see docs/decisions.md). Deliberately not a
+# registered domain behind Cloudflare (see the tech-stack decisions entry: Cloudflare needs a
+# real domain, which doesn't exist yet - explicitly deferred, not an oversight). This was
+# previously a live-only kubectl patch that a real CI/CD deploy then silently overwrote on
+# every push - committing the real value here is what actually fixes that, not another live
+# patch. If this cluster is ever torn down and rebuilt again, re-run `kubectl get svc -n
+# ingress-nginx ingress-nginx-controller` and update both this file and prod's the same way.
 #
 # REAL BUG, CAUGHT LIVE: this host was previously the BARE domain (64-225-85-246.nip.io,
 # no "staging." prefix) - identical to what a request with no matching Host header falls
@@ -24,7 +27,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
 spec:
   rules:
-    - host: staging.64-225-85-246.nip.io
+    - host: staging.139-59-49-28.nip.io
       http:
         paths:
           - path: /
@@ -36,5 +39,5 @@ spec:
                   name: http
   tls:
     - hosts:
-        - staging.64-225-85-246.nip.io
+        - staging.139-59-49-28.nip.io
       secretName: api-tls-staging
