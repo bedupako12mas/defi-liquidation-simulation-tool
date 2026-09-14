@@ -86,7 +86,12 @@ jobs:
       # count once the migration has already succeeded.
       - name: Run migration
         run: |
-          kubectl scale deployment/api --replicas=0 -n liquidation-sim-staging
+          # `|| true`: tolerates a first-ever deploy to a namespace, where no api
+          # Deployment exists yet to scale down (kubectl scale hard-fails NotFound
+          # otherwise, under this job's default `bash -e`) - a real gap found live on
+          # this cluster's first deploy. Every deploy after the first hits the normal,
+          # already-running-pod path this step was originally written for.
+          kubectl scale deployment/api --replicas=0 -n liquidation-sim-staging || true
           kubectl wait --for=delete pod -l app.kubernetes.io/name=api,app.kubernetes.io/component!=migration -n liquidation-sim-staging --timeout=60s || true
           kubectl delete job migrate -n liquidation-sim-staging --ignore-not-found
           sed "s#api:unset#$DIGEST#" k8s/base/migrate-job.yaml | kubectl apply -n liquidation-sim-staging -f -
@@ -142,7 +147,7 @@ jobs:
       # namespace/DB.
       - name: Run migration
         run: |
-          kubectl scale deployment/api --replicas=0 -n liquidation-sim-prod
+          kubectl scale deployment/api --replicas=0 -n liquidation-sim-prod || true
           kubectl wait --for=delete pod -l app.kubernetes.io/name=api,app.kubernetes.io/component!=migration -n liquidation-sim-prod --timeout=60s || true
           kubectl delete job migrate -n liquidation-sim-prod --ignore-not-found
           sed "s#api:unset#$DIGEST#" k8s/base/migrate-job.yaml | kubectl apply -n liquidation-sim-prod -f -
