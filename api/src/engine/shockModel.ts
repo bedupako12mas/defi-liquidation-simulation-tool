@@ -102,21 +102,30 @@ export function applyShock(
   magnitude: number,
   preset: ShockPreset
 ): PriceVector {
+  // Real, live-caught (2026-09-15): basePrices' own keys are checksummed (whatever case
+  // the on-chain `underlying`/`asset` address came back as), but classifyFluidAssets()
+  // (routes/fluidShockClassification.ts) always lowercases its assetConfig keys. A direct
+  // assetConfig[asset] lookup silently missed on every single Fluid and Aave V4 asset -
+  // both use classifyFluidAssets - falling through to the beta=0 default for 100% of them,
+  // every time, with no error: the sweep charts for both protocols looked like they were
+  // streaming real data (no thrown error, real-shaped JSON) while never actually moving
+  // with the shock magnitude at all. Aave V3's own classifier (classifyForShock, called
+  // directly in simulate.ts/positions.ts) never lowercases, so its keys already matched
+  // basePrices' - only Fluid/V4 were ever affected.
+  //
+  // Fixed at the lookup, not by chasing whichever casing convention each classifier
+  // happens to use today: build one lowercased-key config once, then always look up by
+  // lowercased asset. Correct for any classifier regardless of what case its own keys
+  // are in, current or future - not a two-case guess that a third convention could
+  // silently defeat the same way the original bug went undetected.
+  const assetConfigByLowerAsset: Record<string, AssetShockConfig> = {};
+  for (const [asset, cfg] of Object.entries(assetConfig)) {
+    assetConfigByLowerAsset[asset.toLowerCase()] = cfg;
+  }
+
   const shocked: PriceVector = {};
   for (const [asset, basePrice] of Object.entries(basePrices)) {
-    // Real, live-caught (2026-09-15): basePrices' own keys are checksummed (whatever case
-    // the on-chain `underlying`/`asset` address came back as), but classifyFluidAssets()
-    // (routes/fluidShockClassification.ts) always lowercases its assetConfig keys. A
-    // direct assetConfig[asset] lookup here silently missed on every single Fluid and
-    // Aave V4 asset - both use classifyFluidAssets - falling through to the beta=0 default
-    // for 100% of them, every time, with no error: the sweep charts for both protocols
-    // looked like they were streaming real data (no thrown error, real-shaped JSON) while
-    // never actually moving with the shock magnitude at all. Aave V3's own classifier
-    // (classifyForShock, called directly in simulate.ts/positions.ts) never lowercases,
-    // so its keys already matched basePrices' - only Fluid/V4 were ever affected. Falling
-    // back to the lowercased key keeps this correct for both key conventions rather than
-    // silently trusting whichever one the caller happened to use.
-    const cfg = assetConfig[asset] ?? assetConfig[asset.toLowerCase()] ?? { beta: 0, subjectToDepeg: false, subjectToStablecoinDepeg: false };
+    const cfg = assetConfigByLowerAsset[asset.toLowerCase()] ?? { beta: 0, subjectToDepeg: false, subjectToStablecoinDepeg: false };
     let multiplier = 1 + cfg.beta * magnitude;
     // Depeg only bites on the downside, and only for assets flagged as LST/correlated.
     if (cfg.subjectToDepeg && magnitude < 0) {

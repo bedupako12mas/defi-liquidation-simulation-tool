@@ -5,6 +5,19 @@ import { mainnet } from "viem/chains";
 const ALLOWED_CHAIN_IDS = new Set<number>([mainnet.id]); // 1
 
 export function createRpcClient(rpcUrl: string, options?: { multicallBatchSize?: number }) {
+  // Defense in depth, not just index-fluid.ts's own eager validation: a NaN or negative
+  // multicallBatchSize (e.g. a caller passing a malformed env value straight through)
+  // is falsy/never===0, so the ternary below would silently fall to `true` - full
+  // unbounded multicall - the exact behavior this option exists to let a caller disable.
+  // Failing loud here means a future call site that skips its own validation still can't
+  // silently reintroduce the 550M-gas failure this was built to prevent.
+  if (
+    options?.multicallBatchSize !== undefined &&
+    (!Number.isFinite(options.multicallBatchSize) || options.multicallBatchSize < 0)
+  ) {
+    throw new Error(`multicallBatchSize must be a non-negative finite number, got ${options.multicallBatchSize}.`);
+  }
+
   const publicClient = createPublicClient({
     chain: mainnet,
     transport: http(rpcUrl, {
