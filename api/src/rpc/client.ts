@@ -4,7 +4,7 @@ import { mainnet } from "viem/chains";
 // A set, not a single ID, on purpose - see docs/decisions.md. Today this has one member.
 const ALLOWED_CHAIN_IDS = new Set<number>([mainnet.id]); // 1
 
-export function createRpcClient(rpcUrl: string) {
+export function createRpcClient(rpcUrl: string, options?: { multicallBatchSize?: number }) {
   const publicClient = createPublicClient({
     chain: mainnet,
     transport: http(rpcUrl, {
@@ -12,7 +12,24 @@ export function createRpcClient(rpcUrl: string) {
       retryDelay: 500,
       timeout: 10_000,
     }),
-    batch: { multicall: true },
+    // Real, live-caught (2026-09-15): viem's default multicall batching has no gas cap of
+    // its own - it groups every readContract() call issued in the same tick into one
+    // eth_call. loadFluidPositions()'s getAllVaultPositions() return value is large per
+    // vault, so even a shrunk batchSize (tried 512) still grouped 14 vaults and blew a real
+    // RPC gas limit ("gas required exceeds: 550000000") - batchSize alone wasn't enough.
+    // multicallBatchSize === 0 disables multicall entirely for a specific caller (e.g.
+    // index-fluid.ts): one eth_call per vault, individually well under any gas cap, at the
+    // cost of more RPC round-trips (a recoverable rate-limit problem, not a hard wall).
+    // Omitted, this is byte-for-byte the same `{ multicall: true }` every existing call site
+    // (including the live server) already runs with.
+    batch: {
+      multicall:
+        options?.multicallBatchSize === 0
+          ? false
+          : options?.multicallBatchSize
+            ? { batchSize: options.multicallBatchSize }
+            : true,
+    },
   });
 
   /**
