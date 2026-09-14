@@ -18,6 +18,15 @@ spec:
               value: "4000"
             - name: NODE_ENV
               value: staging
+            - name: ALLOWED_ORIGINS
+              # Real, live-caught gap (2026-09-14): this was never set for staging - CORS
+              # (@fastify/cors, server.ts) fails closed on an unset/empty origin, so every
+              # browser fetch from the Vercel Preview deployment would have silently failed
+              # while curl-based health checks looked fine (CORS is browser-only - same
+              # class of gotcha prod's own ALLOWED_ORIGINS comment already describes).
+              # This is Vercel's stable git-branch alias for `staging`, not a per-deploy
+              # Preview URL (those get a random hash per build and would break every push).
+              value: "https://defi-liquidation-simulation-tool-git-staging-arun-cb84.vercel.app"
           resources:
             requests:
               cpu: "50m"
