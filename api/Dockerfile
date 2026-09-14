@@ -68,8 +68,18 @@ COPY --from=builder --chown=node:node /app/package.json ./package.json
 # bundle, not our application code or its real dependencies. Removing it as root before
 # switching to the non-root user below shrinks real attack surface (OWASP A03) instead of
 # just suppressing the scan.
+#
+# Real, live-caught Trivy finding (2026-09-14): CVE-2026-86145/CVE-2026-89161, HIGH, in
+# Debian's libpcre2-8-0 (10.42-1, fixed in 10.42-1+deb12u1) - the mutable node:22-slim tag
+# had drifted to a base layer with an unpatched OS package since the last build (exactly
+# the risk the digest-pinning TODO above already flags). `--ignore-unfixed` means Trivy
+# only reported it because a fix genuinely exists; pull it in explicitly rather than wait
+# for the next base-image re-pull to happen to include it.
 USER root
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+RUN apt-get update && \
+    apt-get upgrade -y libpcre2-8-0 && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 USER node
 
 # PORT is configurable (matches app/api/src/server.ts's `process.env.PORT ?? 4000` pattern);
