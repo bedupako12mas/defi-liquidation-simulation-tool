@@ -77,6 +77,10 @@ gitleaks-report.*
 # regenerable local tooling artifact, not source or documentation to track.
 graphify-out/
 
+# `vercel link` writes this locally (project/org IDs) - DEPLOYMENT.md calls out committing it
+# by accident as a real risk, not just clutter.
+.vercel
+
 # Local-only working docs - never pushed. See ../Liquidation Mechanisms/docs/ for the full
 # scope/research archive (context.md, SCOPE.md, fundamentals/, study-guide/) - kept private
 # there deliberately, not duplicated here.
