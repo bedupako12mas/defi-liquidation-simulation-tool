@@ -24,7 +24,14 @@ metadata:
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: 3600
-  activeDeadlineSeconds: 1800
+  # Real, live-caught: a fresh 50,000-block V3 backfill at the free tier's forced 10-block
+  # eth_getLogs range, paced at 400ms/chunk to survive the CU/sec cap, needs more than 30
+  # minutes of wall-clock time on its own pacing alone (~5,000 chunks x 400ms ~ 33min, before
+  # real RPC latency). V4 finished in ~10min at the same settings since its real event volume
+  # over the same window is much lower - V3's longer real history means more real work here,
+  # not a stuck job. Resumes from indexer_progress either way, so bumping this costs nothing
+  # on a restart.
+  activeDeadlineSeconds: 3600
   template:
     metadata:
       labels:
