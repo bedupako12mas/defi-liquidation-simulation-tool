@@ -1,0 +1,63 @@
+# k8s/base/index-aave-v4-job.yaml
+#
+# On-demand Aave V4 borrow-candidate discovery + enrichment (aaveV4Indexer.ts) - same real
+# gap and same fix as index-aave-job.yaml, for `aave_v4_borrow_candidates`.
+#
+# NOT wired into deploy.yml, NOT in kustomization.yaml's resources - same reasoning as
+# index-aave-job.yaml.
+#   sed "s#api:unset#<real digest>#" k8s/base/index-aave-v4-job.yaml | kubectl apply -n <namespace> -f -
+#   kubectl wait --for=condition=complete job/index-aave-v4 -n <namespace> --timeout=900s
+#   kubectl logs job/index-aave-v4 -n <namespace>
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: index-aave-v4
+  labels:
+    app.kubernetes.io/name: api
+    app.kubernetes.io/part-of: liquidation-simulator
+    app.kubernetes.io/component: index-aave-v4
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+        app.kubernetes.io/component: index-aave-v4
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: index-aave-v4
+          image: "api:unset"
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/indexer/aaveV4Indexer.js"]
+          envFrom:
+            - secretRef:
+                name: api-secrets
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "192Mi"
+            limits:
+              cpu: "500m"
+              memory: "384Mi"
+      volumes:
+        - name: tmp
+          emptyDir: {}

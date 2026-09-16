@@ -4,6 +4,9 @@ import type { DB } from "../db/types.js";
 import { discoverAaveV4BorrowCandidates } from "../loaders/aaveV4BorrowDiscovery.js";
 import { enrichAaveV4Positions } from "../loaders/aaveV4UserEnrichment.js";
 import { syncAaveV4Snapshot } from "../loaders/syncAaveV4Snapshot.js";
+import { publicClient, assertAllowedChain } from "../rpc/client.js";
+import { db as dbClient } from "../db/client.js";
+import { redactError } from "../rpc/redact.js";
 
 const PROTOCOL = "aave-v4" as const;
 
@@ -86,4 +89,27 @@ export async function runAaveV4IndexSync(
     scannedFromBlock: fromBlock,
     scannedToBlock: finalizedBlock,
   };
+}
+
+// Self-executing when run directly, same convention as src/indexer/aaveIndexer.ts.
+const isMain = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
+if (isMain) {
+  await assertAllowedChain();
+
+  // Same real, live-confirmed free-tier eth_getLogs cap as the V3 indexer.
+  const chunkSize = process.env.AAVE_V4_INDEXER_CHUNK_SIZE ? BigInt(process.env.AAVE_V4_INDEXER_CHUNK_SIZE) : undefined;
+  const enrichBatchSize = process.env.AAVE_V4_ENRICH_BATCH_SIZE ? Number(process.env.AAVE_V4_ENRICH_BATCH_SIZE) : undefined;
+  const enrichInterBatchDelayMs = process.env.AAVE_V4_ENRICH_INTER_BATCH_DELAY_MS
+    ? Number(process.env.AAVE_V4_ENRICH_INTER_BATCH_DELAY_MS)
+    : undefined;
+
+  try {
+    const result = await runAaveV4IndexSync(publicClient, dbClient, chunkSize, enrichBatchSize, enrichInterBatchDelayMs);
+    console.log(JSON.stringify(result, (_key, value) => (typeof value === "bigint" ? value.toString() : value), 2));
+    await dbClient.destroy();
+  } catch (err) {
+    console.error(redactError(err));
+    await dbClient.destroy();
+    process.exit(1);
+  }
 }

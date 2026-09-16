@@ -1,0 +1,68 @@
+# k8s/base/index-aave-job.yaml
+#
+# On-demand Aave V3 borrow-candidate discovery + enrichment (aaveIndexer.ts). Real gap this
+# closes: `aave_borrow_candidates` sat empty on both staging and prod after their Postgres
+# was rebuilt, so sync-validation-job.yaml/sync-profitability-job.yaml skip Aave entirely
+# ("no aave_borrow_candidates - run npm run index:aave first") until this has run at least
+# once. src/indexer/aaveIndexer.ts already compiled into dist/ before this task - only a
+# self-executing entrypoint was missing (added alongside this file, same isMain convention
+# as src/db/migrate.ts / src/sync/validationResults.ts).
+#
+# NOT wired into deploy.yml, NOT in kustomization.yaml's resources - periodic/on-demand
+# real eth_getLogs scan + enrichment (minutes, RPC-plan-dependent), not a per-deploy step.
+#   sed "s#api:unset#<real digest>#" k8s/base/index-aave-job.yaml | kubectl apply -n <namespace> -f -
+#   kubectl wait --for=condition=complete job/index-aave -n <namespace> --timeout=900s
+#   kubectl logs job/index-aave -n <namespace>
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: index-aave
+  labels:
+    app.kubernetes.io/name: api
+    app.kubernetes.io/part-of: liquidation-simulator
+    app.kubernetes.io/component: index-aave
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+        app.kubernetes.io/component: index-aave
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: index-aave
+          image: "api:unset"
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/indexer/aaveIndexer.js"]
+          envFrom:
+            - secretRef:
+                name: api-secrets
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "192Mi"
+            limits:
+              cpu: "500m"
+              memory: "384Mi"
+      volumes:
+        - name: tmp
+          emptyDir: {}

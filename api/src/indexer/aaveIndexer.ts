@@ -7,6 +7,9 @@ import { resolveAaveAddresses } from "../loaders/aaveAddresses.js";
 import { loadReserveConfigs } from "../loaders/aaveReserveConfig.js";
 import { enrichPositions } from "../loaders/aaveUserEnrichment.js";
 import { syncAaveSnapshot } from "../loaders/syncAaveSnapshot.js";
+import { publicClient, assertAllowedChain } from "../rpc/client.js";
+import { db as dbClient } from "../db/client.js";
+import { redactError } from "../rpc/redact.js";
 
 const PROTOCOL = "aave" as const;
 
@@ -102,4 +105,34 @@ export async function runAaveIndexSync(
     scannedFromBlock: fromBlock,
     scannedToBlock: finalizedBlock,
   };
+}
+
+// Self-executing when run directly (`node dist/indexer/aaveIndexer.js` in the real
+// container/Job, or `tsx src/indexer/aaveIndexer.ts` / via scripts/index-aave.ts locally) -
+// NOT when imported as a library elsewhere (e.g. this file's own tests), same convention as
+// src/db/migrate.ts and src/sync/validationResults.ts.
+const isMain = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
+if (isMain) {
+  await assertAllowedChain();
+
+  // Same real, live-confirmed free-tier eth_getLogs cap as scripts/index-aave.ts's own
+  // comment describes - overridable via env since the right value depends on the actual
+  // RPC plan in use, not a fixed assumption.
+  const chunkSize = process.env.AAVE_INDEXER_CHUNK_SIZE ? BigInt(process.env.AAVE_INDEXER_CHUNK_SIZE) : undefined;
+  const enrichBatchSize = process.env.AAVE_ENRICH_BATCH_SIZE ? Number(process.env.AAVE_ENRICH_BATCH_SIZE) : undefined;
+  const enrichInterBatchDelayMs = process.env.AAVE_ENRICH_INTER_BATCH_DELAY_MS
+    ? Number(process.env.AAVE_ENRICH_INTER_BATCH_DELAY_MS)
+    : undefined;
+
+  try {
+    const result = await runAaveIndexSync(publicClient, dbClient, chunkSize, enrichBatchSize, enrichInterBatchDelayMs);
+    console.log(JSON.stringify(result, (_key, value) => (typeof value === "bigint" ? value.toString() : value), 2));
+    await dbClient.destroy();
+  } catch (err) {
+    // See redact.ts - both viem (RPC_URL_MAINNET) and pg (DATABASE_URL) errors can embed the
+    // raw connection URL, credentials included, directly in .message/.details/.stack.
+    console.error(redactError(err));
+    await dbClient.destroy();
+    process.exit(1);
+  }
 }
