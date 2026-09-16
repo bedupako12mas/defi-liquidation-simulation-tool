@@ -1,0 +1,68 @@
+# k8s/base/sync-profitability-job.yaml
+#
+# On-demand gas-vs-bonus profitability sync (#43) - populates the Overview tab's "Gas cost of
+# liquidation" card and the Validation tab's "Gas vs. bonus" section. Same real gap and same
+# fix as sync-validation-job.yaml (see that file's top comment and
+# src/sync/liquidationProfitability.ts) - `liquidation_profitability` sat empty on both
+# staging and prod.
+#
+# NOT wired into deploy.yml, NOT in kustomization.yaml's resources - same reasoning as
+# sync-validation-job.yaml. Apply manually or via a CronJob later if periodic refresh is wanted:
+#   sed "s#api:unset#<real digest>#" k8s/base/sync-profitability-job.yaml | kubectl apply -n <namespace> -f -
+#   kubectl wait --for=condition=complete job/sync-liquidation-profitability -n <namespace> --timeout=900s
+#   kubectl logs job/sync-liquidation-profitability -n <namespace>
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sync-liquidation-profitability
+  labels:
+    app.kubernetes.io/name: api
+    app.kubernetes.io/part-of: liquidation-simulator
+    app.kubernetes.io/component: sync-liquidation-profitability
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  # Real, RPC-heavy work: up to 40 Aave + 15 Fluid positions, each sweeping a 9-rung magnitude
+  # ladder with a real eth_estimateGas call per rung tried - the slowest of the two sync jobs.
+  activeDeadlineSeconds: 1200
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+        app.kubernetes.io/component: sync-liquidation-profitability
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sync-liquidation-profitability
+          image: "api:unset"
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/sync/liquidationProfitability.js"]
+          envFrom:
+            - secretRef:
+                name: api-secrets
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "192Mi"
+            limits:
+              cpu: "500m"
+              memory: "384Mi"
+      volumes:
+        - name: tmp
+          emptyDir: {}

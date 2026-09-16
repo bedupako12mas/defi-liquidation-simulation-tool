@@ -1,0 +1,81 @@
+# k8s/base/sync-validation-job.yaml
+#
+# On-demand real-eth_call validation sync (#30/#36) - populates the Validation tab's
+# "Aave V3/Fluid T1 - correctness check" tables. Real gap this closes: this sync script
+# existed only in scripts/ (dev-only, never copied into the Docker image - see
+# src/sync/validationResults.ts's top comment) until now, so there was no credential-safe way
+# to run it against a real deployed environment's database - `validation_results` sat empty
+# on both staging and prod after their Postgres was rebuilt. Same "move real logic to src/ so
+# it compiles into dist/ and can run as a Job with envFrom" fix as migrate-job.yaml already
+# established for migrations.
+#
+# NOT wired into deploy.yml (unlike migrate-job.yaml) - this is a periodic/on-demand refresh
+# (real, RPC-heavy work, minutes not seconds), not a per-deploy schema step. Apply manually
+# or via a CronJob later if periodic refresh is wanted:
+#   sed "s#api:unset#<real digest>#" k8s/base/sync-validation-job.yaml | kubectl apply -n <namespace> -f -
+#   kubectl wait --for=condition=complete job/sync-validation-results -n <namespace> --timeout=600s
+#   kubectl logs job/sync-validation-results -n <namespace>
+# Deliberately NOT listed in kustomization.yaml's `resources:` - same immutable-pod-template
+# reasoning as migrate-job.yaml (a re-apply with a new image digest would fail on the second
+# run onward if kustomize tried to manage this the same way as the Deployment).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sync-validation-results
+  labels:
+    app.kubernetes.io/name: api
+    app.kubernetes.io/part-of: liquidation-simulator
+    app.kubernetes.io/component: sync-validation-results
+spec:
+  # Fail fast and loud, not silently retried - a sync failure needs a human looking at the
+  # real RPC/DB error, not three quiet attempts burying it (same reasoning as migrate-job.yaml).
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  # Real, RPC-heavy work over a bounded sample (up to 50 Aave + 20 Fluid positions, each
+  # doing several real eth_calls) - minutes, not seconds. No fixed number here since real RPC
+  # latency varies; if this proves too tight in practice, raise it rather than removing it.
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+        app.kubernetes.io/component: sync-validation-results
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sync-validation-results
+          # Placeholder, same convention as deployment.yaml/migrate-job.yaml - substitute the
+          # real digest-pinned image before applying. Same image as the real API deployment,
+          # not a separate build - dist/sync/validationResults.js is exactly what shipped.
+          image: "api:unset"
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/sync/validationResults.js"]
+          envFrom:
+            - secretRef:
+                name: api-secrets
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "192Mi"
+            limits:
+              cpu: "500m"
+              memory: "384Mi"
+      volumes:
+        - name: tmp
+          emptyDir: {}
