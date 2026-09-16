@@ -15,8 +15,6 @@ import { MethodologyTab } from "@/components/tabs/MethodologyTab";
 import { CascadeDetailTab } from "@/components/tabs/CascadeDetailTab";
 import { ValidationTab } from "@/components/tabs/ValidationTab";
 import { SmartVaultsTab } from "@/components/tabs/SmartVaultsTab";
-import { SmartDebtVaultsTab } from "@/components/tabs/SmartDebtVaultsTab";
-import { FullySmartVaultsTab } from "@/components/tabs/FullySmartVaultsTab";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -24,9 +22,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "methodology", label: "Methodology" },
   { id: "cascade", label: "Cascade detail" },
   { id: "validation", label: "Validation" },
-  { id: "smart-vaults", label: "Smart vaults (T2)" },
-  { id: "smart-debt-vaults", label: "Smart debt vaults (T3)" },
-  { id: "fully-smart-vaults", label: "Fully smart vaults (T4)" },
+  { id: "smart-vaults", label: "Smart vaults" },
 ];
 
 function TabContent({ active }: { active: TabId }) {
@@ -43,10 +39,6 @@ function TabContent({ active }: { active: TabId }) {
       return <ValidationTab />;
     case "smart-vaults":
       return <SmartVaultsTab />;
-    case "smart-debt-vaults":
-      return <SmartDebtVaultsTab />;
-    case "fully-smart-vaults":
-      return <FullySmartVaultsTab />;
   }
 }
 

@@ -16,9 +16,7 @@ export type TabId =
   | "methodology"
   | "cascade"
   | "validation"
-  | "smart-vaults"
-  | "smart-debt-vaults"
-  | "fully-smart-vaults";
+  | "smart-vaults";
 
 export interface NavigationState {
   active: TabId;

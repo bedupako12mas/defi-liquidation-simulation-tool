@@ -1,22 +1,23 @@
 "use client";
 
 /**
- * Deploy 3/6 - Fluid T3 (normal collateral, smart debt). The mirror image of
- * SmartVaultsTab.tsx (T2) - same oracle-override repricing mechanism, same interactive
- * slider/preset pattern, applied to the debt leg's real DEX reserves instead of the
- * collateral leg's.
+ * Deploy 1/6 - Fluid T2 (smart collateral, normal debt). Real T2 vaults valued under the
+ * full shock sweep via oracle-override repricing of the smart-collateral leg's real DEX
+ * reserves (api/src/db/syncFluidT2Shock.ts) - see docs/decisions.md's 2026-08-25 entry for
+ * why a swap-simulation approach was tried first and abandoned: Fluid's own single-swap
+ * price-impact cap makes it structurally incapable of reaching realistic depeg magnitudes on
+ * a well-capitalized pool.
  *
- * One real difference from T2 worth surfacing here rather than hiding: vaultDebtValueUsd8 is
- * the REAL, precise per-vault share of the debt pool (this vault's own debt shares divided
- * by the pool's total shares - both real on-chain values), not a rough pool-level
- * approximation. An earlier version used the pool's raw total directly, which made a real,
- * healthy, active vault look ~38x over-indebted - found and fixed live (see
- * api/src/db/migrations/0009_fluid_t3_shock_results.ts's top comment) before this tab ever
- * shipped, unlike T2's still-open pool-share approximation.
+ * Interactive, same pattern as Overview/PositionDrilldown's magnitude slider - the sweep is
+ * already fully computed and fetched once (all 81 magnitudes x 5 presets x every vault), so
+ * dragging the slider just filters the already-in-memory data, no refetch per drag tick. An
+ * earlier version of this tab showed one static row per vault fixed at -50% with no way to
+ * move it - a real product gap, caught by the user pointing out there was nothing to
+ * actually simulate.
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchFluidT3Shock, type FluidT3ShockResult } from "@/lib/api/fluidT3Shock";
+import { fetchFluidT2Shock, type FluidT2ShockResult } from "@/lib/api/fluidT2Shock";
 import { formatUsd8 } from "@/lib/format";
 import { InfoTooltip } from "@/components/shared/InfoTooltip";
 
@@ -43,11 +44,14 @@ interface VaultBaseline {
   token1: string;
 }
 
-export function SmartDebtVaultsTab() {
-  const [rows, setRows] = useState<FluidT3ShockResult[] | null>(null);
+export function SmartCollateralVaultsPanel() {
+  const [rows, setRows] = useState<FluidT2ShockResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Same two-state debounce as SmartVaultsTab (T2) - see that file's comment for why wiring
-  // the slider directly to render-driving state caused flickering.
+  // Two-state debounce, same pattern as PositionDrilldown's slider: sliderValue updates on
+  // every drag event (immediate label feedback), magnitude - the one that actually drives
+  // the table re-render - only updates 150ms after dragging stops. Wiring the slider
+  // directly to the render-driving state (the original version of this file) forced a full
+  // table re-render on every single drag tick, visible as flickering.
   const [sliderValue, setSliderValue] = useState(-30);
   const [magnitude, setMagnitude] = useState(-30);
   const [presetId, setPresetId] = useState<(typeof PRESETS)[number]["id"]>("correlated");
@@ -59,7 +63,7 @@ export function SmartDebtVaultsTab() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchFluidT3Shock()
+    fetchFluidT2Shock()
       .then((data) => {
         if (!cancelled) setRows(data);
       })
@@ -87,30 +91,42 @@ export function SmartDebtVaultsTab() {
   }, [rows]);
 
   if (error) {
-    return <div className="banner banner-warning">Failed to load Fluid T3 vault data: {error}</div>;
+    return <div className="banner banner-warning">Failed to load Fluid T2 vault data: {error}</div>;
   }
 
   if (!rows) {
-    return <p>Loading Fluid T3 vault data…</p>;
+    return <p>Loading Fluid T2 vault data…</p>;
   }
 
   const liquidatableCount = vaultsAtSelection.filter((r) => r.liquidatable).length;
 
   return (
     <div>
-      <h2>Fluid T3 vaults - normal collateral, smart debt</h2>
+      <h2>Fluid T2 vaults - smart collateral, normal debt</h2>
       <p>
-        Each of these real vaults borrows through a DEX liquidity position (a real Fluid
-        pool) rather than owing a plain token balance - the mirror image of T2&apos;s smart
-        collateral. Collateral here is a single, plain token.{" "}
-        <InfoTooltip label="How smart-debt value is computed">
-          Value is computed the same way as T2&apos;s smart-collateral leg: reprice the debt
-          leg&apos;s two underlying tokens under the shock, then value the pool&apos;s real
-          current reserves at those shocked prices. This vault&apos;s own share of that pool
-          value is computed precisely (its own debt shares divided by the pool&apos;s total
-          debt shares), not approximated at the pool level.
+        Each of these real vaults holds its collateral as a DEX liquidity position (a real
+        Fluid pool, e.g. a WBTC-cbBTC pair) rather than a plain token balance - it earns
+        trading fees, but its value shifts with the pool&apos;s own reserve composition, not
+        just the underlying tokens&apos; prices.{" "}
+        <InfoTooltip label="How smart-collateral value is computed">
+          Value here is computed by directly repricing the leg&apos;s two underlying tokens
+          (same shock model as every other tab), then valuing the DEX pool&apos;s real current
+          reserves at those shocked prices - not by simulating a real swap against the pool. A
+          swap-based approach was tried first and abandoned: Fluid&apos;s own single-transaction
+          price-impact limit turned out to be far too small to reach a realistic depeg
+          magnitude on a well-capitalized pool.
         </InfoTooltip>
       </p>
+
+      <div className="banner banner-info">
+        <strong>Real per-vault share, not the whole pool.</strong> Some of these DEX pools are
+        shared across multiple vaults (one real pool found shared by 18 distinct vaults) -
+        &quot;Collateral value&quot; below is this specific vault&apos;s real fraction of the
+        pool&apos;s value (its own supply shares divided by the pool&apos;s total shares,
+        both real on-chain values), not the whole shared pool&apos;s total. An earlier version
+        used the raw pool total directly - fixed after the same approximation was found to be
+        actively wrong (not just imprecise) on T3&apos;s debt leg.
+      </div>
 
       <div className="control-row" style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", margin: "1rem 0" }}>
         <div>
@@ -127,11 +143,11 @@ export function SmartDebtVaultsTab() {
         </div>
 
         <div style={{ flex: "1 1 240px", minWidth: "240px" }}>
-          <label htmlFor="t3-magnitude-slider" style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+          <label htmlFor="t2-magnitude-slider" style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
             Shock magnitude: {sliderValue}%
           </label>
           <input
-            id="t3-magnitude-slider"
+            id="t2-magnitude-slider"
             className="magnitude-slider"
             type="range"
             min={MAGNITUDE_MAX}
@@ -145,7 +161,7 @@ export function SmartDebtVaultsTab() {
 
       <p>
         At <strong>{magnitude}%</strong> under the <strong>{PRESETS.find((p) => p.id === presetId)?.label}</strong>{" "}
-        preset: <strong>{liquidatableCount}</strong> of <strong>{vaultsAtSelection.length}</strong> real T3 vaults
+        preset: <strong>{liquidatableCount}</strong> of <strong>{vaultsAtSelection.length}</strong> real T2 vaults
         would be liquidatable.
       </p>
 
@@ -154,20 +170,20 @@ export function SmartDebtVaultsTab() {
           <thead>
             <tr>
               <th>Vault</th>
-              <th>Debt pair</th>
+              <th>Collateral pair</th>
               <th>
                 Collateral value
                 <InfoTooltip label="What collateral value means here">
-                  This vault&apos;s real normal-collateral balance, priced at the shocked
-                  price for its preset.
+                  The DEX pool&apos;s real reserves at the selected shock, priced at the
+                  shocked prices.
                 </InfoTooltip>
               </th>
               <th>
                 Debt value
                 <InfoTooltip label="What debt value means here">
-                  This vault&apos;s real, precise share of the debt DEX pool&apos;s value at
-                  the selected shock - its own debt shares divided by the pool&apos;s total
-                  shares, not the whole pool&apos;s value.
+                  This vault&apos;s real aggregate borrow balance, priced at today&apos;s real
+                  market price (unaffected by the collateral-side shock preset). Normal leg - a
+                  plain balance, same as T1.
                 </InfoTooltip>
               </th>
               <th>Status</th>
@@ -199,9 +215,9 @@ export function SmartDebtVaultsTab() {
       </div>
 
       <p className="provenance" style={{ marginTop: "0.75rem" }}>
-        {vaultsAtSelection.length} real, active T3 vaults - drag the slider or switch presets
-        to see how each one&apos;s smart-debt value moves ({rows.length} total rows fetched
-        once, covering every vault across all 5 presets and all 81 swept magnitudes).
+        {vaultsAtSelection.length} real, active T2 vaults - drag the slider or switch presets
+        to see how each one&apos;s smart-collateral value moves ({rows.length} total rows
+        fetched once, covering every vault across all 5 presets and all 81 swept magnitudes).
       </p>
     </div>
   );

@@ -44,7 +44,7 @@ interface VaultBaseline {
   samePool: boolean;
 }
 
-export function FullySmartVaultsTab() {
+export function FullySmartVaultsPanel() {
   const [rows, setRows] = useState<FluidT4ShockResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Same two-state debounce as SmartVaultsTab/SmartDebtVaultsTab - see those files' comments
