@@ -31,7 +31,20 @@ async function main() {
     ? Number(process.env.AAVE_ENRICH_INTER_BATCH_DELAY_MS)
     : undefined;
 
-  const result = await runAaveIndexSync(publicClient, db, chunkSize, enrichBatchSize, enrichInterBatchDelayMs);
+  const chunkDelayMs = process.env.AAVE_INDEXER_CHUNK_DELAY_MS ? Number(process.env.AAVE_INDEXER_CHUNK_DELAY_MS) : undefined;
+  const initialLookbackBlocks = process.env.AAVE_INDEXER_INITIAL_LOOKBACK_BLOCKS
+    ? BigInt(process.env.AAVE_INDEXER_INITIAL_LOOKBACK_BLOCKS)
+    : undefined;
+
+  const result = await runAaveIndexSync(
+    publicClient,
+    db,
+    chunkSize,
+    enrichBatchSize,
+    enrichInterBatchDelayMs,
+    chunkDelayMs,
+    initialLookbackBlocks,
+  );
   console.log(JSON.stringify(result, (_key, value) => (typeof value === "bigint" ? value.toString() : value), 2));
 
   await db.destroy();

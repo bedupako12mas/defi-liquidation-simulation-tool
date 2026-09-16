@@ -1,6 +1,6 @@
 import { type PublicClient, parseAbiItem, getAddress } from "viem";
 import { AAVE_V3_POOL_ADDRESS } from "./aaveAddresses.js";
-import { withRateLimitRetry } from "../rpc/rateLimitRetry.js";
+import { withRateLimitRetry, sleep } from "../rpc/rateLimitRetry.js";
 
 // onBehalfOf, not user, is the account whose debt actually increases - user is only the
 // caller (relevant for credit-delegated borrows). See docs/decisions.md - getting this
@@ -27,6 +27,15 @@ export interface DiscoverBorrowCandidatesParams {
    * finding from review, not a hypothetical.
    */
   onChunkScanned?: (chunkCandidates: BorrowCandidate[], scannedThroughBlock: bigint) => Promise<void> | void;
+  /**
+   * Real, live-caught gap (2026-09-16): withRateLimitRetry's backoff only fires AFTER a
+   * failure - back-to-back successful calls with zero pacing between them still exceed a
+   * free-tier "compute units per second" cap on a long backfill (thousands of chunks at the
+   * provider's forced 10-block range), tripping the retry path on nearly every call instead
+   * of avoiding it. This paces every chunk, successful or not, so the sustained request rate
+   * itself stays under the cap - a real throttle, not just a reaction to one.
+   */
+  chunkDelayMs?: number;
 }
 
 const DEFAULT_CHUNK_SIZE = 5000n;
@@ -34,7 +43,7 @@ const MIN_CHUNK_SIZE = 50n;
 
 export async function discoverBorrowCandidates(
   client: PublicClient,
-  { fromBlock, toBlock, chunkSize = DEFAULT_CHUNK_SIZE, onChunkScanned }: DiscoverBorrowCandidatesParams,
+  { fromBlock, toBlock, chunkSize = DEFAULT_CHUNK_SIZE, onChunkScanned, chunkDelayMs = 0 }: DiscoverBorrowCandidatesParams,
 ): Promise<BorrowCandidate[]> {
   if (fromBlock > toBlock) {
     throw new Error(`fromBlock (${fromBlock}) is after toBlock (${toBlock})`);
@@ -78,6 +87,9 @@ export async function discoverBorrowCandidates(
     }
 
     cursor = rangeEnd + 1n;
+    if (chunkDelayMs > 0 && cursor <= safeToBlock) {
+      await sleep(chunkDelayMs);
+    }
   }
 
   return allCandidates;

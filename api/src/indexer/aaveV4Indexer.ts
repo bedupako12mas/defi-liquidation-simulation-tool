@@ -31,6 +31,9 @@ export async function runAaveV4IndexSync(
   chunkSize?: bigint,
   enrichBatchSize?: number,
   enrichInterBatchDelayMs?: number,
+  /** See aaveIndexer.ts's identical param/comment. */
+  chunkDelayMs?: number,
+  initialLookbackBlocks?: bigint,
 ): Promise<AaveV4IndexSyncResult> {
   const finalizedBlock = (await client.getBlock({ blockTag: "finalized" })).number;
 
@@ -42,7 +45,7 @@ export async function runAaveV4IndexSync(
 
   const fromBlock = progress
     ? BigInt(progress.last_indexed_block) + 1n
-    : finalizedBlock - DEFAULT_INITIAL_LOOKBACK_BLOCKS;
+    : finalizedBlock - (initialLookbackBlocks ?? DEFAULT_INITIAL_LOOKBACK_BLOCKS);
 
   let newCandidatesDiscovered = 0;
 
@@ -51,6 +54,7 @@ export async function runAaveV4IndexSync(
       fromBlock,
       toBlock: finalizedBlock,
       chunkSize,
+      chunkDelayMs,
       onChunkScanned: async (chunkCandidates, scannedThroughBlock) => {
         if (chunkCandidates.length > 0) {
           await db
@@ -102,9 +106,21 @@ if (isMain) {
   const enrichInterBatchDelayMs = process.env.AAVE_V4_ENRICH_INTER_BATCH_DELAY_MS
     ? Number(process.env.AAVE_V4_ENRICH_INTER_BATCH_DELAY_MS)
     : undefined;
+  const chunkDelayMs = process.env.AAVE_V4_INDEXER_CHUNK_DELAY_MS ? Number(process.env.AAVE_V4_INDEXER_CHUNK_DELAY_MS) : undefined;
+  const initialLookbackBlocks = process.env.AAVE_V4_INDEXER_INITIAL_LOOKBACK_BLOCKS
+    ? BigInt(process.env.AAVE_V4_INDEXER_INITIAL_LOOKBACK_BLOCKS)
+    : undefined;
 
   try {
-    const result = await runAaveV4IndexSync(publicClient, dbClient, chunkSize, enrichBatchSize, enrichInterBatchDelayMs);
+    const result = await runAaveV4IndexSync(
+      publicClient,
+      dbClient,
+      chunkSize,
+      enrichBatchSize,
+      enrichInterBatchDelayMs,
+      chunkDelayMs,
+      initialLookbackBlocks,
+    );
     console.log(JSON.stringify(result, (_key, value) => (typeof value === "bigint" ? value.toString() : value), 2));
     await dbClient.destroy();
   } catch (err) {

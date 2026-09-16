@@ -1,6 +1,6 @@
 import { type PublicClient, parseAbiItem, getAddress } from "viem";
 import { AAVE_V4_SPOKE_ADDRESSES } from "./aaveV4Addresses.js";
-import { withRateLimitRetry } from "../rpc/rateLimitRetry.js";
+import { withRateLimitRetry, sleep } from "../rpc/rateLimitRetry.js";
 
 // Real event, confirmed from Aave's own ISpoke.sol (github.com/aave/aave-v4) - `user` is the
 // position owner (real, NatSpec-documented: "The owner of the position on which debt is
@@ -23,6 +23,9 @@ export interface DiscoverAaveV4BorrowCandidatesParams {
   /** Starting eth_getLogs range size, in blocks. Halved automatically on a range-limit error. */
   chunkSize?: bigint;
   onChunkScanned?: (chunkCandidates: AaveV4BorrowCandidate[], scannedThroughBlock: bigint) => Promise<void> | void;
+  /** See aaveBorrowDiscovery.ts's identical param/comment - same real free-tier CU/sec cap
+   *  applies here too, paces every chunk rather than only backing off after a failure. */
+  chunkDelayMs?: number;
 }
 
 // Real, live-confirmed (2026-09-10, probe-rate-limit-message.ts): this RPC's free tier
@@ -40,7 +43,7 @@ const MIN_CHUNK_SIZE = 10n;
 
 export async function discoverAaveV4BorrowCandidates(
   client: PublicClient,
-  { fromBlock, toBlock, chunkSize = DEFAULT_CHUNK_SIZE, onChunkScanned }: DiscoverAaveV4BorrowCandidatesParams,
+  { fromBlock, toBlock, chunkSize = DEFAULT_CHUNK_SIZE, onChunkScanned, chunkDelayMs = 0 }: DiscoverAaveV4BorrowCandidatesParams,
 ): Promise<AaveV4BorrowCandidate[]> {
   if (fromBlock > toBlock) {
     throw new Error(`fromBlock (${fromBlock}) is after toBlock (${toBlock})`);
@@ -80,6 +83,9 @@ export async function discoverAaveV4BorrowCandidates(
     }
 
     cursor = rangeEnd + 1n;
+    if (chunkDelayMs > 0 && cursor <= safeToBlock) {
+      await sleep(chunkDelayMs);
+    }
   }
 
   return allCandidates;

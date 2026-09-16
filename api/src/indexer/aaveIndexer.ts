@@ -34,6 +34,14 @@ export async function runAaveIndexSync(
   chunkSize?: bigint,
   enrichBatchSize?: number,
   enrichInterBatchDelayMs?: number,
+  /** See aaveBorrowDiscovery.ts's DiscoverBorrowCandidatesParams.chunkDelayMs - paces every
+   *  eth_getLogs call, not just the ones that already failed. */
+  chunkDelayMs?: number,
+  /** Overrides DEFAULT_INITIAL_LOOKBACK_BLOCKS for a first-ever run only (irrelevant once
+   *  indexer_progress has a checkpoint) - lets a first backfill on a slow/rate-limited RPC
+   *  plan complete in a sane amount of time instead of always assuming 50,000 blocks is
+   *  affordable at whatever chunk size/pace this run is using. */
+  initialLookbackBlocks?: bigint,
 ): Promise<AaveIndexSyncResult> {
   const finalizedBlock = (await client.getBlock({ blockTag: "finalized" })).number;
 
@@ -45,7 +53,7 @@ export async function runAaveIndexSync(
 
   const fromBlock = progress
     ? BigInt(progress.last_indexed_block) + 1n
-    : finalizedBlock - DEFAULT_INITIAL_LOOKBACK_BLOCKS;
+    : finalizedBlock - (initialLookbackBlocks ?? DEFAULT_INITIAL_LOOKBACK_BLOCKS);
 
   let newCandidatesDiscovered = 0;
 
@@ -54,6 +62,7 @@ export async function runAaveIndexSync(
       fromBlock,
       toBlock: finalizedBlock,
       chunkSize,
+      chunkDelayMs,
       onChunkScanned: async (chunkCandidates, scannedThroughBlock) => {
         if (chunkCandidates.length > 0) {
           await syncBorrowCandidates(db, chunkCandidates);
@@ -123,9 +132,21 @@ if (isMain) {
   const enrichInterBatchDelayMs = process.env.AAVE_ENRICH_INTER_BATCH_DELAY_MS
     ? Number(process.env.AAVE_ENRICH_INTER_BATCH_DELAY_MS)
     : undefined;
+  const chunkDelayMs = process.env.AAVE_INDEXER_CHUNK_DELAY_MS ? Number(process.env.AAVE_INDEXER_CHUNK_DELAY_MS) : undefined;
+  const initialLookbackBlocks = process.env.AAVE_INDEXER_INITIAL_LOOKBACK_BLOCKS
+    ? BigInt(process.env.AAVE_INDEXER_INITIAL_LOOKBACK_BLOCKS)
+    : undefined;
 
   try {
-    const result = await runAaveIndexSync(publicClient, dbClient, chunkSize, enrichBatchSize, enrichInterBatchDelayMs);
+    const result = await runAaveIndexSync(
+      publicClient,
+      dbClient,
+      chunkSize,
+      enrichBatchSize,
+      enrichInterBatchDelayMs,
+      chunkDelayMs,
+      initialLookbackBlocks,
+    );
     console.log(JSON.stringify(result, (_key, value) => (typeof value === "bigint" ? value.toString() : value), 2));
     await dbClient.destroy();
   } catch (err) {
