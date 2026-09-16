@@ -3,7 +3,7 @@ import { parseAbi } from "viem";
 import type { CollateralLeg, DebtLeg, Position } from "../engine/types.js";
 import type { AaveReserveConfig } from "./aaveReserveConfig.js";
 import { AAVE_V4_SPOKES, type AaveV4SpokeName } from "./aaveV4Addresses.js";
-import { multicallWithRateLimitRetry } from "../rpc/rateLimitRetry.js";
+import { multicallWithRateLimitRetry, withRateLimitRetry } from "../rpc/rateLimitRetry.js";
 
 const TOKEN_ABI = parseAbi(["function symbol() view returns (string)"]);
 
@@ -137,9 +137,16 @@ async function buildPosition(
   reserveConfigByAsset: Map<string, AaveReserveConfig>,
 ): Promise<Position | null> {
   const spoke = AAVE_V4_SPOKES[spokeName];
+  // Real, live-caught gap (2026-09-16): unlike this file's own Stage 1 pre-filter above
+  // (multicallWithRateLimitRetry) and every other individual-call site in this codebase
+  // (aaveBorrowDiscovery.ts's getLogsWithBackoff, etc.), buildPosition's per-reserve calls
+  // had NO retry wrapping at all - a single transient 429 crashed the whole sync job outright
+  // instead of degrading gracefully like every comparable call site elsewhere. This runs once
+  // per (candidate, spoke) pair with real debt, potentially many per-reserve calls each - a
+  // real, previously-unexercised code path at production RPC-contention scale until tonight.
   const [reserveCount, oracle] = await Promise.all([
-    client.readContract({ address: spoke, abi: SPOKE_ABI, functionName: "getReserveCount" }),
-    client.readContract({ address: spoke, abi: SPOKE_ABI, functionName: "ORACLE" }),
+    withRateLimitRetry(() => client.readContract({ address: spoke, abi: SPOKE_ABI, functionName: "getReserveCount" }), "aaveV4UserEnrichment"),
+    withRateLimitRetry(() => client.readContract({ address: spoke, abi: SPOKE_ABI, functionName: "ORACLE" }), "aaveV4UserEnrichment"),
   ]);
 
   const collateral: CollateralLeg[] = [];
@@ -149,29 +156,46 @@ async function buildPosition(
   let primaryCollateralMaxBonusBps = 0n;
 
   for (let reserveId = 0n; reserveId < reserveCount; reserveId++) {
-    const [usedAsCollateral, isBorrowed] = await client.readContract({
-      address: spoke,
-      abi: SPOKE_ABI,
-      functionName: "getUserReserveStatus",
-      args: [reserveId, user as ViemAddress],
-    });
+    const [usedAsCollateral, isBorrowed] = await withRateLimitRetry(
+      () =>
+        client.readContract({
+          address: spoke,
+          abi: SPOKE_ABI,
+          functionName: "getUserReserveStatus",
+          args: [reserveId, user as ViemAddress],
+        }),
+      "aaveV4UserEnrichment",
+    );
     if (!usedAsCollateral && !isBorrowed) continue;
 
-    const reserve = await client.readContract({ address: spoke, abi: SPOKE_ABI, functionName: "getReserve", args: [reserveId] });
-    const price = await client.readContract({ address: oracle, abi: ORACLE_ABI, functionName: "getReservePrice", args: [reserveId] });
+    const reserve = await withRateLimitRetry(
+      () => client.readContract({ address: spoke, abi: SPOKE_ABI, functionName: "getReserve", args: [reserveId] }),
+      "aaveV4UserEnrichment",
+    );
+    const price = await withRateLimitRetry(
+      () => client.readContract({ address: oracle, abi: ORACLE_ABI, functionName: "getReservePrice", args: [reserveId] }),
+      "aaveV4UserEnrichment",
+    );
     const underlying = reserve[0];
     const decimals = reserve[3];
     const dynamicConfigKey = reserve[6];
 
     if (usedAsCollateral) {
-      const supplied = await client.readContract({ address: spoke, abi: SPOKE_ABI, functionName: "getUserSuppliedAssets", args: [reserveId, user as ViemAddress] });
+      const supplied = await withRateLimitRetry(
+        () => client.readContract({ address: spoke, abi: SPOKE_ABI, functionName: "getUserSuppliedAssets", args: [reserveId, user as ViemAddress] }),
+        "aaveV4UserEnrichment",
+      );
       if (supplied > 0n) {
-        const [collateralFactor, maxLiquidationBonus] = await client.readContract({
-          address: spoke,
-          abi: SPOKE_ABI,
-          functionName: "getDynamicReserveConfig",
-          args: [reserveId, dynamicConfigKey],
-        });
+        const [collateralFactor, maxLiquidationBonus] = await withRateLimitRetry(
+          () =>
+            client.readContract({
+              address: spoke,
+              abi: SPOKE_ABI,
+              functionName: "getDynamicReserveConfig",
+              args: [reserveId, dynamicConfigKey],
+            }),
+          "aaveV4UserEnrichment",
+        );
         collateral.push({ asset: underlying, amount: supplied, decimals, liquidationThresholdBps: BigInt(collateralFactor) });
 
         if (!reserveConfigByAsset.has(underlying.toLowerCase())) {
@@ -201,7 +225,10 @@ async function buildPosition(
       }
     }
     if (isBorrowed) {
-      const totalDebt = await client.readContract({ address: spoke, abi: SPOKE_ABI, functionName: "getUserTotalDebt", args: [reserveId, user as ViemAddress] });
+      const totalDebt = await withRateLimitRetry(
+        () => client.readContract({ address: spoke, abi: SPOKE_ABI, functionName: "getUserTotalDebt", args: [reserveId, user as ViemAddress] }),
+        "aaveV4UserEnrichment",
+      );
       if (totalDebt > 0n) {
         debt.push({ asset: underlying, amount: totalDebt, decimals });
 

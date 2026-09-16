@@ -1,0 +1,69 @@
+# k8s/base/sync-capped-rate-breach-job.yaml
+#
+# On-demand mainnet-fork-tier CappedRate cap-breach sync (#38) - populates the Cascade detail
+# tab's "CappedRate cap-breach" table (the real mechanism behind the March 2026 Resolv exploit,
+# ~$21M bad debt). Same real gap and same fix as sync-chained-liquidation-job.yaml - see that
+# file's top comment for the anvil-in-image background and the shared-node resource note.
+# Smaller in scope than the chained-liquidation job (bounded to MAX_VAULTS=10, one fork per
+# vault, sequential), so expected to run faster - same generous deadline anyway rather than
+# risk a second deadline-bump cycle mid-flight.
+#
+# NOT wired into deploy.yml, NOT in kustomization.yaml's resources.
+#   sed "s#api:unset#<real digest>#" k8s/base/sync-capped-rate-breach-job.yaml | kubectl apply -n <namespace> -f -
+#   kubectl wait --for=condition=complete job/sync-capped-rate-breach -n <namespace> --timeout=3600s
+#   kubectl logs job/sync-capped-rate-breach -n <namespace>
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sync-capped-rate-breach
+  labels:
+    app.kubernetes.io/name: api
+    app.kubernetes.io/part-of: liquidation-simulator
+    app.kubernetes.io/component: sync-capped-rate-breach
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  activeDeadlineSeconds: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+        app.kubernetes.io/component: sync-capped-rate-breach
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sync-capped-rate-breach
+          image: "api:unset"
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/sync/cappedRateBreach.js"]
+          envFrom:
+            - secretRef:
+                name: api-secrets
+          securityContext:
+            # See sync-chained-liquidation-job.yaml's identical comment - anvil needs real
+            # writable scratch space while a fork is running.
+            readOnlyRootFilesystem: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "750m"
+              memory: "768Mi"
+      volumes:
+        - name: tmp
+          emptyDir: {}

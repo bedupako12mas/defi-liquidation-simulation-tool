@@ -28,6 +28,28 @@ FROM node:22-slim AS builder
 
 WORKDIR /app
 
+# Real gap this closes: src/fork/anvilFork.ts spawns a real `anvil` binary (Foundry) to run
+# the mainnet-fork tier (chained liquidation, CappedRate breach - see
+# k8s/base/sync-chained-liquidation-job.yaml / sync-capped-rate-breach-job.yaml) - this was
+# never in the deployed image at all, so those two real, already-built, already-verified-
+# working checks had no way to ever run against a live environment. Downloads the same
+# pinned release Foundry's own install script (foundryup) would fetch, but verifies the real
+# published sha256 checksum first rather than piping a script to a shell (this repo's own
+# supply-chain discipline elsewhere - pinned lockfile installs, digest-pinning TODO above -
+# extends here too). Only `anvil` is extracted from the tarball (forge/cast/chisel/solar are
+# real binaries this image has no use for) to keep the image from growing more than it needs
+# to.
+ARG FOUNDRY_VERSION=v1.8.3
+ARG FOUNDRY_SHA256=7ca48e6ca3cac1bce1403ca67e5bc1dc3bc1fd818199c9957c7165079c228568
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/* && \
+    curl -fsSL -o /tmp/foundry.tar.gz \
+      "https://github.com/foundry-rs/foundry/releases/download/${FOUNDRY_VERSION}/foundry_${FOUNDRY_VERSION}_linux_amd64.tar.gz" && \
+    echo "${FOUNDRY_SHA256}  /tmp/foundry.tar.gz" | sha256sum -c - && \
+    tar -xzf /tmp/foundry.tar.gz -C /usr/local/bin anvil && \
+    chmod +x /usr/local/bin/anvil && \
+    rm /tmp/foundry.tar.gz
+
 # Copy only manifests first so this layer caches across dependency-unchanged rebuilds.
 COPY package.json package-lock.json ./
 # npm ci, not npm install: fails closed on a lockfile/manifest mismatch instead of silently
@@ -59,6 +81,10 @@ WORKDIR /app
 COPY --from=builder --chown=node:node /app/dist ./dist
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/package.json ./package.json
+# Root-owned (not --chown=node:node) like every other binary under /usr/local/bin already in
+# this image (node itself, previously npm) - an executable the app process only ever reads
+# and forks, never writes to.
+COPY --from=builder /usr/local/bin/anvil /usr/local/bin/anvil
 
 # The runtime CMD is `node dist/server.js` directly - npm is never invoked in this
 # container. node:22-slim ships npm's own CLI anyway, with its own vendored
@@ -78,6 +104,11 @@ COPY --from=builder --chown=node:node /app/package.json ./package.json
 USER root
 RUN apt-get update && \
     apt-get upgrade -y libpcre2-8-0 && \
+    # anvil makes its own outbound HTTPS connection to RPC_URL_MAINNET at runtime (its
+    # --fork-url) - a separate real TLS client from Node's own bundled cert store, so it
+    # needs the system CA bundle present here too, not just at build time in the builder
+    # stage above.
+    apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 USER node

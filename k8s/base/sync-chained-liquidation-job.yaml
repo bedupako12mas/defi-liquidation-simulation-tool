@@ -1,0 +1,88 @@
+# k8s/base/sync-chained-liquidation-job.yaml
+#
+# On-demand mainnet-fork-tier chained-liquidation sync (#37/#38) - populates the Cascade
+# detail tab's "Chained liquidation" table across every real tier (Aave V3, Fluid T1/T2/T3/T4,
+# Aave V4). Real gap this closes: this script spawns a real `anvil` fork binary
+# (src/fork/anvilFork.ts) that was never present in the deployed image at all (see
+# api/Dockerfile's builder-stage Foundry install), and its own logic lived only in scripts/
+# (dev-only, never copied into the image - same class of gap sync-validation-job.yaml already
+# fixed for the RPC-tier checks). `chained_liquidation_results` sat empty on both staging and
+# prod as a result.
+#
+# Real, deliberate note (anvilFork.ts's own top comment): this cluster's single node was
+# previously found to have "no spare capacity for a persistent forked node" and this
+# capability was, at the time, deliberately never deployed to the cluster at all - only run
+# locally/in CI (test/globalSetup.ts's pattern). Current node headroom (checked live before
+# adding this) shows real capacity on the requests side (~37% CPU / ~42% memory free), but
+# this is still real, non-trivial resource use on a shared node also running live prod
+# traffic - conservative requests/limits below, and this should be run and watched closely
+# (one tier's worth of forks at a time is expected to be the norm, not a background habit).
+#
+# NOT wired into deploy.yml, NOT in kustomization.yaml's resources - same reasoning as
+# sync-validation-job.yaml (periodic/on-demand, not a per-deploy step).
+#   sed "s#api:unset#<real digest>#" k8s/base/sync-chained-liquidation-job.yaml | kubectl apply -n <namespace> -f -
+#   kubectl wait --for=condition=complete job/sync-chained-liquidation -n <namespace> --timeout=3600s
+#   kubectl logs job/sync-chained-liquidation -n <namespace>
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sync-chained-liquidation
+  labels:
+    app.kubernetes.io/name: api
+    app.kubernetes.io/part-of: liquidation-simulator
+    app.kubernetes.io/component: sync-chained-liquidation
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  # Real, RPC- and fork-heavy work across six tiers (Aave V3 groups, Fluid T1/T2/T3/T4,
+  # Aave V4), each tier spinning up and mining real transactions on its own ephemeral fork,
+  # one at a time (never concurrent - see this file's own sequential main()). Generous
+  # budget given tonight's real experience with how slow a rate-limited free-tier RPC plan
+  # can make even the non-fork sync jobs.
+  activeDeadlineSeconds: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+        app.kubernetes.io/component: sync-chained-liquidation
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sync-chained-liquidation
+          image: "api:unset"
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/sync/chainedLiquidation.js"]
+          envFrom:
+            - secretRef:
+                name: api-secrets
+          securityContext:
+            # NOT readOnlyRootFilesystem - anvil itself needs to write its own real, ephemeral
+            # process state under /tmp while a fork is running (unlike the other sync jobs,
+            # which do nothing but read RPC and write to Postgres). Same emptyDir-at-/tmp
+            # mount as the read-only jobs, just without the filesystem-wide read-only flag
+            # those don't need this exception for.
+            readOnlyRootFilesystem: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "750m"
+              memory: "768Mi"
+      volumes:
+        - name: tmp
+          emptyDir: {}
