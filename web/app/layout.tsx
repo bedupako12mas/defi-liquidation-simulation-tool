@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata = {
-  title: "Aave V3 vs Fluid T1 - Liquidation Simulator (v2)",
+  title: "Aave V3, Aave V4 & Fluid - Liquidation Simulator",
   description:
-    "RPC-tier and (eventually) mainnet-fork-tier comparison of Aave V3 and Fluid T1 liquidation mechanics under named price shocks.",
+    "Compares Aave V3, Aave V4, and Fluid T1 liquidation mechanics under named price shocks, with gas-cost-of-liquidation metrics and disclosed modeling limitations.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
