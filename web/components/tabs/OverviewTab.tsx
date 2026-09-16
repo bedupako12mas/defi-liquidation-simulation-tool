@@ -6,6 +6,7 @@ import { useSimulationStream } from "@/lib/hooks/useSimulationStream";
 import { PresetSelector } from "@/components/overview/PresetSelector";
 import { StreamedChart, type MetricKey } from "@/components/overview/StreamedChart";
 import { PositionDrilldown } from "@/components/overview/PositionDrilldown";
+import { GasComparisonSummary } from "@/components/overview/GasComparisonSummary";
 import { InfoTooltip } from "@/components/shared/InfoTooltip";
 import type { ShockPreset } from "@/lib/api/meta";
 
@@ -20,13 +21,14 @@ import type { ShockPreset } from "@/lib/api/meta";
 // pill row (no interaction required), `technical` is the same precise definition used in
 // MethodologyTab's "Comparing Aave and Fluid fairly" card, surfaced via InfoTooltip rather
 // than duplicated as separate prose that could drift out of sync.
-const METRICS: { key: MetricKey; label: string; plain: string; technical: string }[] = [
+const METRICS: { key: MetricKey; label: string; plain: string; technical: string; glossaryId: string }[] = [
   {
     key: "liquidatablePositionPct",
     label: "Liquidatable/eligible (%)",
     plain: "Share of positions that could be liquidated right now, at this shock size.",
     technical:
       "Liquidatable/eligible count as a percentage of each protocol's own sampled book, not an absolute number - so it stays comparable across Aave's small sample and Fluid's much larger one, without either being dominated by whichever position happens to be largest.",
+    glossaryId: "liquidatable-pct",
   },
   {
     key: "toxicPositionPct",
@@ -34,6 +36,7 @@ const METRICS: { key: MetricKey; label: string; plain: string; technical: string
     plain: "Share of positions where liquidating them now would only make things worse - already past the point of no return.",
     technical:
       "Toxic count (current LTV past the undercollateralization frontier) as a percentage of the sampled book. Toxic is always a subset of liquidatable/eligible, never a separate condition reached on its own.",
+    glossaryId: "toxic-pct",
   },
   {
     key: "liquidatableCollateralPct",
@@ -41,6 +44,7 @@ const METRICS: { key: MetricKey; label: string; plain: string; technical: string
     plain: "Share of total collateral value sitting in at-risk positions, in dollar terms rather than headcount.",
     technical:
       "The same idea as the count-based metric above, applied to collateral value instead of position count. More sensitive to a single large position - which is exactly what concentration (below) exists to measure explicitly, rather than leave hidden inside a dollar total.",
+    glossaryId: "liquidatable-collateral-pct",
   },
   {
     key: "concentrationPct",
@@ -48,6 +52,7 @@ const METRICS: { key: MetricKey; label: string; plain: string; technical: string
     plain: "How much of the at-risk collateral sits in just one single position - high means one whale dominates the picture, low means risk is spread out.",
     technical:
       "The single largest at-risk position's share of all at-risk collateral, at a given shock. High concentration means a dollar swing is a single-position artifact, not a broad signal; low, stable concentration means it is.",
+    glossaryId: "concentration",
   },
   {
     key: "badDebtSeverityMedian",
@@ -55,6 +60,7 @@ const METRICS: { key: MetricKey; label: string; plain: string; technical: string
     plain: "How much of a position's debt could be wiped out if the liquidator gets it slightly wrong.",
     technical:
       "The median debt/collateral ratio among only the positions that are actually underwater, not the summed dollar total - separates \"many positions barely underwater\" from \"one position catastrophically underwater,\" which a single summed total conflates.",
+    glossaryId: "bad-debt-severity",
   },
 ];
 
@@ -75,7 +81,7 @@ export function OverviewTab() {
       </div>
 
       <div className="card">
-        <h2>Metric</h2>
+        <h2>Compare Aave V3, Aave V4 &amp; Fluid T1</h2>
         <div className="pill-group" style={{ marginBottom: "1rem" }}>
           {METRICS.map((m) => (
             <button
@@ -91,7 +97,9 @@ export function OverviewTab() {
         </div>
         <p className="preset-note metric-explainer" style={{ marginTop: 0, marginBottom: "1rem" }}>
           <span>{activeMetric.plain}</span>
-          <InfoTooltip label={`How "${activeMetric.label}" is defined`}>{activeMetric.technical}</InfoTooltip>
+          <InfoTooltip label={`How "${activeMetric.label}" is defined`} glossaryId={activeMetric.glossaryId}>
+            {activeMetric.technical}
+          </InfoTooltip>
         </p>
         {meta ? (
           <StreamedChart
@@ -109,6 +117,11 @@ export function OverviewTab() {
         {stream.status === "error" && stream.error && (
           <div className="banner">Simulation stream error: {stream.error}</div>
         )}
+      </div>
+
+      <div className="card">
+        <h2>Gas cost of liquidation</h2>
+        {meta ? <GasComparisonSummary presetId={presetId} /> : <p className="loading">Waiting for scenario...</p>}
       </div>
 
       <div className="card">

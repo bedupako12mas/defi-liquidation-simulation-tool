@@ -273,7 +273,7 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
               much higher line - past which liquidating it can no longer make it healthier,
               only less bad.
             </span>
-            <InfoTooltip label="Technical definition of Liquidatable, Toxic, and these percentages">
+            <InfoTooltip label="Technical definition of Liquidatable, Toxic, and these percentages" glossaryId="state">
               A position becomes <strong>Liquidatable</strong> once its LTV crosses the
               liquidation <strong>Threshold</strong> (first tick below) - the protocol&apos;s
               own eligibility bar. It only becomes <strong>Toxic</strong> past the{" "}
@@ -292,7 +292,7 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
               <div className="count">{concentrationPct === null ? "—" : `${concentrationPct.toFixed(1)}%`}</div>
               <div className="label">
                 <span>Largest at-risk position&apos;s share of at-risk collateral</span>
-                <InfoTooltip label="What concentration means">
+                <InfoTooltip label="What concentration means" glossaryId="concentration">
                   <strong>Plain language:</strong> how much of the at-risk total is really just
                   one whale position, rather than broad-based risk.
                   <br />
@@ -308,7 +308,7 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
               <div className="count">{severityMedian === null ? "—" : `${(severityMedian * 100).toFixed(0)}%`}</div>
               <div className="label">
                 <span>Median debt/collateral ratio, underwater positions only</span>
-                <InfoTooltip label="What bad-debt severity means">
+                <InfoTooltip label="What bad-debt severity means" glossaryId="bad-debt-severity">
                   <strong>Plain language:</strong> how much of a position&apos;s debt could be
                   wiped out if a liquidator gets it slightly wrong, typically.
                   <br />
@@ -329,7 +329,7 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
               </div>
               <div className="label">
                 <span>Median shock magnitude at which a position first crosses its threshold</span>
-                <InfoTooltip label="What headroom (kill-price) means">
+                <InfoTooltip label="What headroom (kill-price) means" glossaryId="headroom">
                   <strong>Plain language:</strong> how big a price drop it typically takes to
                   push a position into trouble.
                   <br />
@@ -378,7 +378,7 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
                   <th>Debt (USD)</th>
                   <th>
                     Health factor
-                    <InfoTooltip label="What health factor means">
+                    <InfoTooltip label="What health factor means" glossaryId="hf">
                       <strong>Plain language:</strong> a single number for how safe a position
                       is. Above 1 is safe; below 1 means it can be liquidated.
                       <br />
@@ -392,7 +392,7 @@ export function PositionDrilldown({ presetId }: { presetId: ShockPreset["id"] })
                   </th>
                   <th>
                     LTV vs. Threshold vs. UC frontier
-                    <InfoTooltip label="What LTV, threshold, and UC frontier mean">
+                    <InfoTooltip label="What LTV, threshold, and UC frontier mean" glossaryId="uc-frontier">
                       <strong>Plain language:</strong> where the position&apos;s current
                       borrowed-against-collateral ratio (LTV) sits relative to two lines - the
                       one where liquidation becomes possible, and the much higher one past which

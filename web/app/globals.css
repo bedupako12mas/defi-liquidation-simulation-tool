@@ -314,3 +314,38 @@ ul.limitations li { margin-bottom: 0.5rem; }
 }
 
 .metric-explainer { display: flex; align-items: flex-start; }
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--series-aave);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-button:hover { color: var(--text-primary); }
+
+.info-tooltip-glossary-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--series-aave);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.glossary-row--highlight { background: color-mix(in srgb, var(--series-aave) 18%, transparent); transition: background 0.3s ease; }
+
+.gas-summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin: 0.5rem 0; }
+.gas-summary-cell { border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem 1rem; }
+.gas-summary-protocol { font-weight: 600; margin-bottom: 0.5rem; }
+.gas-summary-row { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 0.2rem 0; }
+.gas-summary-row span { color: var(--text-secondary); }
+@media (max-width: 640px) {
+  .gas-summary-grid { grid-template-columns: 1fr; }
+}

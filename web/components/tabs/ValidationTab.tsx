@@ -294,7 +294,7 @@ export function ValidationTab() {
       <div className="card">
         <h2>
           Gas vs. bonus - is it actually worth a liquidator&apos;s time?
-          <InfoTooltip label="What this section checks">
+          <InfoTooltip label="What this section checks" glossaryId="gas-cost">
             <strong>Plain language:</strong> a liquidation only really happens if a real
             liquidator profits from it after paying real gas. This checks that directly - a
             real gas estimate against a real bonus, at real (if currently very low) gas

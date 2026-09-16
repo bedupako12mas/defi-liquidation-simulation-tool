@@ -209,7 +209,7 @@ export function CascadeDetailTab() {
       <div className="card">
         <h2>
           Chained liquidation - does a real liquidation change what comes next?
-          <InfoTooltip label="What this section checks">
+          <InfoTooltip label="What this section checks" glossaryId="real-diff">
             <strong>Plain language:</strong> if a real liquidator clears position/vault A
             right now, does that change what a second, identical check on B would report a
             moment later - something isolated testing can never see, since it never mines a
@@ -315,7 +315,7 @@ export function CascadeDetailTab() {
       <div className="card">
         <h2>
           CappedRate cap-breach - does the real cap actually hold?
-          <InfoTooltip label="What this section checks">
+          <InfoTooltip label="What this section checks" glossaryId="peg-trust-mode">
             <strong>Plain language:</strong> Fluid&apos;s LST-tracking price feeds are
             deliberately &ldquo;stale on purpose&rdquo; - they only re-check the real
             underlying rate periodically (a real &ldquo;heartbeat&rdquo;). On some assets the

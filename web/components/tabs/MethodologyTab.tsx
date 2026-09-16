@@ -4,7 +4,6 @@ import { useCapabilities } from "@/lib/hooks/useCapabilities";
 import { UcFrontierTable } from "@/components/overview/UcFrontierTable";
 import { LimitationsPanel } from "@/components/shared/LimitationsPanel";
 import { InfoTooltip } from "@/components/shared/InfoTooltip";
-import { Glossary } from "@/components/shared/Glossary";
 
 export function MethodologyTab() {
   const { meta, loading, error } = useCapabilities();
@@ -28,7 +27,7 @@ export function MethodologyTab() {
             </div>
             <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
               Has more collateral value than it needs. No liquidation is possible.
-              <InfoTooltip label="What health factor means">
+              <InfoTooltip label="What health factor means" glossaryId="hf">
                 <strong>Technical:</strong> health factor (collateral value &times; liquidation
                 threshold, divided by debt value) &ge; 1.
               </InfoTooltip>
@@ -42,7 +41,7 @@ export function MethodologyTab() {
             <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
               A liquidator could step in and profit right now - though on Fluid that depends on
               whether a sweep actually reaches this position, not a guarantee.
-              <InfoTooltip label="Technical definition of Liquidatable / Eligible">
+              <InfoTooltip label="Technical definition of Liquidatable / Eligible" glossaryId="state">
                 Health factor &lt; 1, but current LTV is still under the undercollateralization
                 (UC) frontier, 1/(1+i). Aave calls this state <strong>Liquidatable</strong>; Fluid
                 T1 positions are labeled <strong>Eligible</strong> instead - deliberately
@@ -100,7 +99,7 @@ export function MethodologyTab() {
           <strong>Bad debt is Level 2</strong>: a simplified aggregate approximation
           (<code>max(0, debt - collateral)</code>) at the shocked price - it does not replicate
           the real contract&apos;s close-factor
-          <InfoTooltip label="What close factor means">
+          <InfoTooltip label="What close factor means" glossaryId="close-factor">
             <strong>Plain language:</strong> most lending protocols cap how much of a single
             position&apos;s debt can be repaid in one liquidation call (e.g. 50% at a time), so
             a badly underwater position may take several liquidations to fully unwind, not one.
@@ -121,7 +120,7 @@ export function MethodologyTab() {
       <div className="card">
         <h2>
           The undercollateralization frontier - LTV_UC = 1 / (1 + i)
-          <InfoTooltip label="What the UC frontier means, in plain terms">
+          <InfoTooltip label="What the UC frontier means, in plain terms" glossaryId="uc-frontier">
             <strong>Plain language:</strong> past a certain debt-to-collateral ratio, liquidating
             a position can no longer make it healthier - every liquidation from there only digs
             the hole deeper. That ratio is the UC (undercollateralization) frontier.
@@ -178,7 +177,7 @@ export function MethodologyTab() {
           </li>
           <li>
             <strong>Concentration</strong>
-            <InfoTooltip label="What concentration means, in plain terms">
+            <InfoTooltip label="What concentration means, in plain terms" glossaryId="concentration">
               How much of the at-risk collateral total is really just one whale position, rather
               than broadly spread risk. High concentration means a single position could swing
               the numbers on its own.
@@ -220,17 +219,10 @@ export function MethodologyTab() {
         <h2>Known limitations</h2>
         {loading && <p className="loading">Loading...</p>}
         {meta && <LimitationsPanel limitations={meta.limitations} />}
-      </div>
-
-      <div className="card">
-        <h2>Glossary</h2>
-        <p className="preset-note" style={{ marginTop: 0, marginBottom: "1rem" }}>
-          Every metric and status shown anywhere in this app, in one place - grouped by
-          where it appears. The inline (i) icons throughout explain a term where it&apos;s
-          used; this is the central lookup for &ldquo;I saw a word somewhere, what did it
-          mean.&rdquo;
+        <p className="preset-note" style={{ marginBottom: 0 }}>
+          Every metric mentioned above, with its formula, is in the <strong>Glossary</strong>{" "}
+          tab - the (i) icons throughout this page link straight to the relevant row there.
         </p>
-        <Glossary />
       </div>
     </div>
   );

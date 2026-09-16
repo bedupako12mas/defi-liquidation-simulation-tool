@@ -23,4 +23,18 @@ describe("MethodologyTab", () => {
     await waitFor(() => expect(screen.queryAllByText(/MOCK MODE/).length).toBeGreaterThan(0));
     expect(screen.getAllByRole("row").length).toBeGreaterThan(1); // header + at least one data row
   });
+
+  it("points to the Glossary tab instead of embedding the glossary itself", async () => {
+    render(
+      <CapabilitiesProvider>
+        <MethodologyTab />
+      </CapabilitiesProvider>
+    );
+    await waitFor(() => expect(screen.queryAllByText(/MOCK MODE/).length).toBeGreaterThan(0));
+
+    expect(screen.getByText(/is in the/)).toBeInTheDocument();
+    expect(screen.getByText("Glossary")).toBeInTheDocument();
+    // The full glossary table (health-factor row, etc.) no longer lives on this tab.
+    expect(screen.queryByText("Health factor (HF)")).toBeNull();
+  });
 });

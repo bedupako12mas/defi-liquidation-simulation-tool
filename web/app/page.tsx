@@ -6,10 +6,11 @@
  * leaked"). Do not add per-feature logic here; it belongs in the relevant tab/component.
  */
 
-import { useState } from "react";
 import { CapabilitiesProvider, useCapabilities } from "@/lib/hooks/useCapabilities";
+import { NavigationProvider, useNavigation, type TabId } from "@/lib/hooks/useNavigation";
 import { USE_MOCK } from "@/lib/api/meta";
 import { OverviewTab } from "@/components/tabs/OverviewTab";
+import { GlossaryTab } from "@/components/tabs/GlossaryTab";
 import { MethodologyTab } from "@/components/tabs/MethodologyTab";
 import { CascadeDetailTab } from "@/components/tabs/CascadeDetailTab";
 import { ValidationTab } from "@/components/tabs/ValidationTab";
@@ -17,17 +18,9 @@ import { SmartVaultsTab } from "@/components/tabs/SmartVaultsTab";
 import { SmartDebtVaultsTab } from "@/components/tabs/SmartDebtVaultsTab";
 import { FullySmartVaultsTab } from "@/components/tabs/FullySmartVaultsTab";
 
-type TabId =
-  | "overview"
-  | "methodology"
-  | "cascade"
-  | "validation"
-  | "smart-vaults"
-  | "smart-debt-vaults"
-  | "fully-smart-vaults";
-
 const TABS: { id: TabId; label: string }[] = [
   { id: "overview", label: "Overview" },
+  { id: "glossary", label: "Glossary" },
   { id: "methodology", label: "Methodology" },
   { id: "cascade", label: "Cascade detail" },
   { id: "validation", label: "Validation" },
@@ -40,6 +33,8 @@ function TabContent({ active }: { active: TabId }) {
   switch (active) {
     case "overview":
       return <OverviewTab />;
+    case "glossary":
+      return <GlossaryTab />;
     case "methodology":
       return <MethodologyTab />;
     case "cascade":
@@ -56,17 +51,18 @@ function TabContent({ active }: { active: TabId }) {
 }
 
 function AppShell() {
-  const [active, setActive] = useState<TabId>("overview");
+  const { active, goTo } = useNavigation();
   const { capabilities, meta } = useCapabilities();
 
   return (
     <div className="container">
       <header>
-        <h1>Aave V3 vs. Fluid T1 - Liquidation Simulator (v2)</h1>
+        <h1>Aave V3, Aave V4 &amp; Fluid - Liquidation Simulator</h1>
         <p className="subtitle">
-          As a named price shock deepens, how much collateral becomes liquidatable on each
-          protocol, and where does bad debt start? RPC-tier sweep today; mainnet-fork-tier
-          cascade replay lights up automatically once it ships.
+          See how much collateral becomes liquidatable as a price shock deepens across Aave V3,
+          Aave V4, and Fluid T1 vaults, whether it&apos;s worth a liquidator&apos;s gas to act,
+          and this tool&apos;s own modeling limitations - the Glossary and Methodology tabs have
+          the details.
         </p>
       </header>
 
@@ -97,13 +93,21 @@ function AppShell() {
         </div>
       )}
 
+      <p className="preset-note" style={{ marginTop: "-0.75rem", marginBottom: "1.25rem" }}>
+        This tool simulates, it doesn&apos;t predict -{" "}
+        <button type="button" className="link-button" onClick={() => goTo("methodology")}>
+          see every modeling limitation and approximation
+        </button>
+        .
+      </p>
+
       <nav className="tab-nav">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             data-active={active === tab.id}
-            onClick={() => setActive(tab.id)}
+            onClick={() => goTo(tab.id)}
           >
             {tab.label}
             {tab.id === "cascade" && capabilities && !capabilities.fork ? " (soon)" : ""}
@@ -118,8 +122,10 @@ function AppShell() {
 
 export default function Page() {
   return (
-    <CapabilitiesProvider>
-      <AppShell />
-    </CapabilitiesProvider>
+    <NavigationProvider>
+      <CapabilitiesProvider>
+        <AppShell />
+      </CapabilitiesProvider>
+    </NavigationProvider>
   );
 }

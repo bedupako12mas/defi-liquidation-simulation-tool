@@ -9,11 +9,24 @@
  */
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useNavigation } from "@/lib/hooks/useNavigation";
 
-export function InfoTooltip({ label, children }: { label: string; children: ReactNode }) {
+export function InfoTooltip({
+  label,
+  glossaryId,
+  children,
+}: {
+  label: string;
+  /** When set, the popover gets a "Full definition & formula" link that jumps straight to
+   *  that row in the Glossary tab (web/components/shared/Glossary.tsx's entry `id`s) - the
+   *  short blurb here stays the quick, in-place explanation; the glossary is the full one. */
+  glossaryId?: string;
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLSpanElement>(null);
   const popoverId = useId();
+  const { goTo } = useNavigation();
 
   // Hover opens it for pointer users; click/tap toggles it for keyboard and touch, which
   // also has to win over hover so it stays open on touch devices (no real hover there).
@@ -53,6 +66,22 @@ export function InfoTooltip({ label, children }: { label: string; children: Reac
       {open && (
         <span role="note" id={popoverId} className="info-tooltip-popover">
           {children}
+          {glossaryId && (
+            <>
+              <br />
+              <br />
+              <button
+                type="button"
+                className="info-tooltip-glossary-link"
+                onClick={() => {
+                  setOpen(false);
+                  goTo("glossary", glossaryId);
+                }}
+              >
+                Full definition &amp; formula →
+              </button>
+            </>
+          )}
         </span>
       )}
     </span>
